@@ -1,30 +1,91 @@
-# Role-based AI Assistant
+# Rural MediBot - SIH26133
 
-A customizable AI chatbot built with Next.js and Groq (Llama 3). 
+## PROJECT
+Rural MediBot
 
-This application allows users to dynamically assign a "role" to the AI (e.g., Math Teacher, Software Engineer, Fitness Coach). The AI will strictly adhere to that role and politely refuse to answer any questions that fall outside its assigned expertise.
+## SIH PROBLEM STATEMENT
+SIH26133 - Accessibility and quality of public healthcare services, particularly in rural and underserved areas.
 
-## Features
-- **Dynamic Roles**: Change the AI's behavior instantly by typing a new role.
-- **Strict Guardrails**: Rejects off-topic questions automatically.
-- **Multilingual Support**: Supports English, Hindi, and Tamil.
-- **Voice Input**: Speak your questions directly to the bot.
+## CURRENT ARCHITECTURE
+The application features a Next.js (App Router) frontend and a FastAPI backend using a shared PostgreSQL database.
+- **Frontend**: Next.js 16.2.10, React 19, Tailwind CSS 4
+- **Backend**: FastAPI, Python 3, SQLAlchemy, Alembic
+- **AI Engine**: LangChain, LangGraph, Groq, ChromaDB, Sentence Transformers
 
-## Getting Started
+## DATABASE
+PostgreSQL is the primary application database for user data, profiles, and audit logs.
+SQLite is used for LangGraph state checkpointing (memory).
+ChromaDB is used for vector search.
 
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Add your Groq API Key to `.env.local`:
-   ```env
-   GROQ_API_KEY=your_groq_api_key_here
-   ```
-4. Run the development server: `npm run dev`
-5. Open [http://localhost:3000](http://localhost:3000)
+## AUTHENTICATION & USER ROLES
+- JWT-based authentication
+- Secure password hashing using bcrypt
+- Roles: `patient`, `doctor`, `admin`
 
-## Deployment
+## LOCAL DEVELOPMENT
 
-Deploy easily to Vercel using the Vercel CLI:
+### ENVIRONMENT SETUP
+1. Copy `.env.example` to `.env`
+2. Update the `GROQ_API_KEY` and other credentials.
+
+### DOCKER SETUP (Recommended)
+You can run the entire stack using Docker Compose:
 ```bash
-npx vercel --prod
+docker compose up -d --build
 ```
-*Don't forget to add your `GROQ_API_KEY` to your Vercel Environment Variables!*
+
+### MANUAL SETUP
+
+#### POSTGRESQL SETUP
+Ensure PostgreSQL is running locally and update `DATABASE_URL` in `.env`.
+For local testing without PostgreSQL, you can use SQLite by setting:
+`DATABASE_URL=sqlite:///./medibot.db`
+
+#### ALEMBIC MIGRATIONS
+Initialize the database schema:
+```bash
+cd backend
+alembic upgrade head
+```
+
+#### RUNNING BACKEND
+```bash
+cd backend
+python -m venv venv
+# Windows
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+#### RUNNING FRONTEND
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+#### RUNNING TESTS
+```bash
+cd backend
+pytest tests/
+```
+
+## API DOCUMENTATION
+When the backend is running, visit `http://localhost:8000/docs` to view the interactive OpenAPI documentation.
+
+## CURRENT MILESTONE (M1)
+- Initializing the core foundation.
+- PostgreSQL database integrated with SQLAlchemy and Alembic.
+- Real user registration, login, and JWT-based authentication.
+- Role-based Access Control (RBAC).
+- AI/RAG system preserved.
+- Jitsi telemedicine preserved.
+
+## FUTURE MILESTONES
+- Offline-first PWA and IndexedDB sync engine
+- ASHA/ANM module and advanced EHR
+- Voice assistant (Marathi/Hindi/Odia)
+- Advanced telemedicine and ABDM integration
+- Emergency ambulance integration and GPS routing
+- Pharmacy price comparison and medicine delivery

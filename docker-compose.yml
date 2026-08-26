@@ -13,33 +13,31 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medibot_user -d medibot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: medibot_backend
     restart: always
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://medibot_user:medibot_pass@db:5432/medibot_db
-      - JWT_SECRET=supersecretjwtkeyforhashingmedibotassessmentspasswords
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7}
       - JWT_ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
-      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
-      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - SENDER_EMAIL=${SENDER_EMAIL:-noreply@medibot.com}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
 
   frontend:
     build:
@@ -48,9 +46,10 @@ services:
     container_name: medibot_frontend
     restart: always
     ports:
-      - "3000:80"
+      - "3000:3000"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api
+      - FASTAPI_BACKEND_URL=http://backend:8000
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7}
     depends_on:
       - backend
 

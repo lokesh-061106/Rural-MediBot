@@ -21,7 +21,7 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         query: message,
-        thread_id: user.id || "default_user_1",
+        thread_id: user.sub || user.id || "default_user_1",
         role_description: roleDescription,
       }),
     });

@@ -14,3 +14,12 @@ rank_bm25
 langgraph
 langchain-groq
 python-dotenv
+
+alembic
+psycopg2-binary
+passlib[bcrypt]
+python-jose[cryptography]
+pytest
+httpx
+
+langgraph-checkpoint-sqlite

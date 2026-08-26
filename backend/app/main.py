@@ -8,8 +8,8 @@ from pydantic import BaseModel
 import sys
 import os
 
-# Ensure the root project directory is in the path so we can import agents
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure the app directory is in the path so we can import agents
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from agents.graph import run_medibot
 
@@ -32,13 +32,31 @@ class ChatRequest(BaseModel):
     query: str
     thread_id: str = "default_user_1"
 
+from app.api.auth import router as auth_router
+from app.api.users import router as users_router
+from app.db.database import engine, Base
+
+# Optional: Create tables if not using Alembic (for quick testing), but we use Alembic
+# Base.metadata.create_all(bind=engine)
+
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(users_router, prefix="/api/users", tags=["users"])
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "MediBot API is running"}
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    try:
+        # Simple DB check
+        with engine.connect() as conn:
+            pass
+        db_status = "connected"
+    except Exception:
+        db_status = "disconnected"
+        
+    return {"status": "healthy", "database": db_status}
 
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -64,4 +82,4 @@ async def chat_endpoint(request: ChatRequest):
         return {"response": f"An error occurred: {str(e)}", "status": "error"}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createUser, signToken, sanitizeUser } from "@/lib/auth";
 
 export async function POST(request) {
   try {
@@ -9,26 +8,54 @@ export async function POST(request) {
     if (!name || !email || !password) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+
+    const backendUrl = process.env.FASTAPI_BACKEND_URL || "http://localhost:8000";
+    
+    // 1. Register with FastAPI
+    const registerResponse = await fetch(`${backendUrl}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_name: name,
+        email: email,
+        password: password,
+        role: role
+      }),
+    });
+    
+    if (!registerResponse.ok) {
+      const errorData = await registerResponse.json().catch(() => ({}));
+      return NextResponse.json(
+        { error: errorData.detail || "Registration failed" }, 
+        { status: registerResponse.status }
+      );
+    }
+    
+    // 2. Automatically login after registration
+    const loginResponse = await fetch(`${backendUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!loginResponse.ok) {
+      return NextResponse.json({ error: "Registration successful but auto-login failed" }, { status: 500 });
     }
 
-    const result = createUser({ name, email, password, role });
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 409 });
-    }
-
-    const token = await signToken(sanitizeUser(result.user));
-    const response = NextResponse.json({ user: sanitizeUser(result.user), token });
-    response.cookies.set("medibot_token", token, {
+    const data = await loginResponse.json();
+    
+    const response = NextResponse.json({ user: data.user, token: data.access_token });
+    response.cookies.set("medibot_token", data.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
     });
+    
     return response;
   } catch (err) {
+    console.error("Register error:", err);
     return NextResponse.json({ error: "Registration failed" }, { status: 500 });
   }
 }

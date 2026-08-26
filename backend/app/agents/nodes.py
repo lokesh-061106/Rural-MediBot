@@ -1,5 +1,5 @@
 from langchain_groq import ChatGroq
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from agents.state import AgentState
 from retrieval.hybrid_search import get_hybrid_retriever
 import os
