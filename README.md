@@ -93,6 +93,44 @@ When the backend is running, visit `http://localhost:8000/docs` to view the inte
 ### Jitsi Verification
 - **Status**: Manually verified page structure. No modifications were made to the telemedicine React integration during M1 refactoring. Live video call not automatically tested.
 
+## OFFLINE-FIRST ARCHITECTURE (M2)
+
+Rural MediBot is designed to function gracefully without internet connectivity, ensuring rural users are never stranded.
+
+### Online Architecture
+When connected, the PWA functions as a Next.js client communicating with a FastAPI PostgreSQL backend, routing medical queries through a Groq/LangGraph RAG pipeline.
+
+### Offline Architecture
+When disconnected, the PWA immediately degrades to an offline-safe mode using:
+- **Service Worker (`sw.js`)**: Caches the App Shell, static assets, and Next.js routes.
+- **IndexedDB (`idb`)**: Local storage for `local_profile`, `emergency_contacts`, `saved_hospitals`, `chat_queue`, and `reminders`.
+- **Connectivity Detection**: A custom React hook (`useConnectivity`) actively monitors network state and drives the `ConnectivityBadge` UI.
+
+### Emergency Fallback
+The offline Chat intercepts messages client-side. If a critical keyword (e.g., "heart attack", "chest pain", "सांस लेने में दिक्कत") is detected across English, Hindi, Marathi, or Tamil, the local Safety Engine immediately routes the user to an Emergency warning. Non-emergencies are queued.
+
+### Sync Engine
+Messages queued while offline are stored in IndexedDB with a `PENDING_SYNC` status. Upon reconnection, the Sync Engine automatically flushes them to the backend via `POST /api/sync/events` in an idempotent batch.
+
+### Features
+**OFFLINE FEATURES (What Works):**
+- App loading and UI navigation
+- Accessing saved Emergency Contacts and Hospitals
+- Queuing chat queries
+- Offline safety triage (Emergency keyword detection)
+- Local Medication Reminders
+
+**ONLINE FEATURES (Requires Connectivity):**
+- AI/LLM conversational responses
+- Telemedicine (Jitsi video calls)
+- Real-time profile synchronization
+
+**NOT YET IMPLEMENTED:**
+- Advanced Offline Maps/Directions
+- Pharmacy API Integration
+- Multilingual Speech-to-Text / Text-to-Speech
+- ABDM / Government API Integrations
+
 ## FUTURE MILESTONES
 - Offline-first PWA and IndexedDB sync engine
 - ASHA/ANM module and advanced EHR

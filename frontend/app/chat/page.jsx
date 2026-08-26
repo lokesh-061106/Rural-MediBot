@@ -27,22 +27,41 @@ export default function ChatPage() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setLoading(true);
+
     try {
-      const history = messages.slice(1).map((m) => ({ role: m.role, content: m.content }));
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history, language: lang, roleDescription }),
-      });
-      const data = await res.json();
-      setMessages((m) => [...m, { 
-        role: "model", 
-        content: data.response || "Sorry, I couldn't process that.",
-        sources: data.sources || []
-      }]);
-      // Save to localStorage
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        // --- OFFLINE MODE ---
+        const { analyzeQueryOffline, getOfflineEmergencyResponse, getOfflineFallbackResponse } = await import('../../lib/offline-triage');
+        const { queueChatMessage } = await import('../../lib/db');
+        
+        const triageResult = analyzeQueryOffline(text);
+        
+        if (triageResult.isEmergency) {
+          setMessages((m) => [...m, { role: "model", content: getOfflineEmergencyResponse() }]);
+        } else {
+          // Queue the message to be synced later
+          await queueChatMessage({ query: text, thread_id: "default_user_1", roleDescription });
+          setMessages((m) => [...m, { role: "model", content: getOfflineFallbackResponse() }]);
+        }
+      } else {
+        // --- ONLINE MODE ---
+        const history = messages.slice(1).map((m) => ({ role: m.role, content: m.content }));
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, history, language: lang, roleDescription }),
+        });
+        const data = await res.json();
+        setMessages((m) => [...m, { 
+          role: "model", 
+          content: data.response || "Sorry, I couldn't process that.",
+          sources: data.sources || []
+        }]);
+      }
+
+      // Save to localStorage (simple history)
       const saved = JSON.parse(localStorage.getItem("medibot_chats") || "[]");
-      saved.push({ date: new Date().toISOString(), symptoms: text, response: data.response });
+      saved.push({ date: new Date().toISOString(), symptoms: text });
       localStorage.setItem("medibot_chats", JSON.stringify(saved.slice(-20)));
     } catch {
       setMessages((m) => [...m, { role: "model", content: "⚠️ Connection error. Please try again." }]);
