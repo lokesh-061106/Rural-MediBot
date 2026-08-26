@@ -1,18 +1,20 @@
-from datetime import datetime, timedelta
+import bcrypt
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Union
 from jose import jwt
-from passlib.context import CryptContext
-import os
 
-PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7") # Fallback for dev only
 
 def get_password_hash(password: str) -> str:
-    return PWD_CONTEXT.hash(password)
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return PWD_CONTEXT.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 def create_access_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None, role: str = "patient") -> str:
     if expires_delta:

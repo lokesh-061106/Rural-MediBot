@@ -1,14 +1,25 @@
 from langchain_community.retrievers import BM25Retriever
-from sentence_transformers import CrossEncoder
-from vector_db.chroma_store import vector_db_manager
+from vector_db.chroma_store import get_vector_db_manager
 
-# Re-ranker model
-# We use a small, fast cross-encoder fine-tuned on MS MARCO for passage ranking
-cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', max_length=512)
+_cross_encoder = None
+
+def get_cross_encoder():
+    global _cross_encoder
+    if _cross_encoder is None:
+        import os
+        if os.environ.get("USE_MOCK_LLM") == "true":
+            class MockEncoder:
+                def predict(self, pairs):
+                    return [1.0 for _ in pairs]
+            _cross_encoder = MockEncoder()
+        else:
+            from sentence_transformers import CrossEncoder
+            _cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', max_length=512)
+    return _cross_encoder
 
 class HybridRetriever:
     def __init__(self):
-        self.vector_store = vector_db_manager.vector_store
+        self.vector_store = get_vector_db_manager().vector_store
         
         # 1. Initialize Semantic Retriever (using ChromaDB)
         self.semantic_retriever = self.vector_store.as_retriever(
@@ -57,7 +68,7 @@ class HybridRetriever:
             
         # 2. Cross-Encoder Re-ranking
         pairs = [[query, doc.page_content] for doc in retrieved_docs]
-        scores = cross_encoder.predict(pairs)
+        scores = get_cross_encoder().predict(pairs)
         
         scored_docs = list(zip(retrieved_docs, scores))
         scored_docs.sort(key=lambda x: x[1], reverse=True)

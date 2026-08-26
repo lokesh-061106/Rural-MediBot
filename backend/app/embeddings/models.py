@@ -6,6 +6,12 @@ class EmbeddingModelConfig:
         
     def get_embeddings(self):
         """Returns the configured embedding model for LangChain."""
+        import os
+        if os.environ.get("USE_MOCK_LLM") == "true":
+            from langchain_core.embeddings import FakeEmbeddings
+            return FakeEmbeddings(size=384)
+            
+        from langchain_community.embeddings import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(
             model_name=self.model_name,
             model_kwargs={'device': 'cpu'},  # Change to 'cuda' if GPU is available

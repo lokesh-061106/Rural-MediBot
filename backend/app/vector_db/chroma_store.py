@@ -30,4 +30,10 @@ class VectorStoreManager:
         return self.vector_store.max_marginal_relevance_search(query, k=k, fetch_k=fetch_k)
 
 # Global instance for easy access
-vector_db_manager = VectorStoreManager()
+_vector_db_manager = None
+
+def get_vector_db_manager():
+    global _vector_db_manager
+    if _vector_db_manager is None:
+        _vector_db_manager = VectorStoreManager()
+    return _vector_db_manager

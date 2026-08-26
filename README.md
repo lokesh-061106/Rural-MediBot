@@ -74,13 +74,24 @@ pytest tests/
 ## API DOCUMENTATION
 When the backend is running, visit `http://localhost:8000/docs` to view the interactive OpenAPI documentation.
 
-## CURRENT MILESTONE (M1)
-- Initializing the core foundation.
-- PostgreSQL database integrated with SQLAlchemy and Alembic.
-- Real user registration, login, and JWT-based authentication.
-- Role-based Access Control (RBAC).
-- AI/RAG system preserved.
-- Jitsi telemedicine preserved.
+## CURRENT MILESTONE (M1.1)
+- Hardened foundation with mockable AI dependency.
+- Fixed global LLM initialization to prevent `pytest` collection failures.
+- Implemented robust `pytest` suite for Authentication, JWT, and RBAC tests without requiring real `GROQ_API_KEY`.
+- Refactored `database.py` to prevent silent SQLite fallback in production, ensuring PostgreSQL is explicitly required.
+
+## TESTING & VERIFICATION STATUS
+### PostgreSQL Verification
+- **Status**: Limited local testing due to agent environment restrictions (No Docker/PostgreSQL available natively on test environment).
+- **Implementation**: The application enforces PostgreSQL via `DATABASE_URL` in production, rejecting SQLite to prevent silent fallback. For automated testing, `TESTING=true` explicitly permits a sandboxed SQLite instance.
+
+### AI / RAG Testing
+- **Status**: Tested with mocked LLM.
+- **Implementation**: `USE_MOCK_LLM=true` injects `FakeListLLM` and `FakeEmbeddings` to allow complete API orchestration testing without real API keys, internet, or Groq requests.
+- **Real Groq Smoke-test**: Not executed during CI due to unavailable keys.
+
+### Jitsi Verification
+- **Status**: Manually verified page structure. No modifications were made to the telemedicine React integration during M1 refactoring. Live video call not automatically tested.
 
 ## FUTURE MILESTONES
 - Offline-first PWA and IndexedDB sync engine

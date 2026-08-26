@@ -23,3 +23,7 @@ pytest
 httpx
 
 langgraph-checkpoint-sqlite
+
+email-validator
+
+bcrypt<4.0.0

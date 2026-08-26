@@ -4,10 +4,26 @@ from agents.state import AgentState
 from retrieval.hybrid_search import get_hybrid_retriever
 import os
 
-# Initialize Groq LLM (requires GROQ_API_KEY environment variable)
-# Using llama3-70b-8192 which is excellent for complex medical reasoning
-llm = ChatGroq(model="llama3-70b-8192", temperature=0)
-retriever = get_hybrid_retriever()
+# Lazy initialize Groq LLM and Retriever
+_llm = None
+_retriever = None
+
+def get_llm():
+    global _llm
+    if _llm is None:
+        if os.environ.get("USE_MOCK_LLM") == "true":
+            from langchain_core.language_models import FakeListLLM
+            _llm = FakeListLLM(responses=["medical Mocked AI response for testing purposes.", "Mocked AI response for testing purposes."])
+        else:
+            from langchain_groq import ChatGroq
+            _llm = ChatGroq(model="llama3-70b-8192", temperature=0)
+    return _llm
+
+def get_retriever():
+    global _retriever
+    if _retriever is None:
+        _retriever = get_hybrid_retriever()
+    return _retriever
 
 def triage_node(state: AgentState) -> AgentState:
     """
@@ -25,13 +41,26 @@ def triage_node(state: AgentState) -> AgentState:
         "Query: {query}"
     )
     
-    chain = triage_prompt | llm
-    response = chain.invoke({"query": query}).content.strip().lower()
+    chain = triage_prompt | get_llm()
+    response = chain.invoke({"query": query})
     
-    state["query_type"] = response
-    state["is_emergency"] = response == "emergency"
+    if hasattr(response, "content"):
+        content = response.content.strip().lower()
+    else:
+        content = str(response).strip().lower()
+        
+    # FakeListLLM might not follow the exact format, ensure it works in tests
+    if "emergency" in content:
+        result_type = "emergency"
+    elif "medical" in content:
+        result_type = "medical"
+    else:
+        result_type = "general"
     
-    print(f"[Triage Agent] Classified as: {response}")
+    state["query_type"] = result_type
+    state["is_emergency"] = result_type == "emergency"
+    
+    print(f"[Triage Agent] Classified as: {result_type}")
     
     # If it's an emergency, we don't need to retrieve documents, we handle it immediately
     if state["is_emergency"]:
@@ -47,7 +76,7 @@ def retrieval_node(state: AgentState) -> AgentState:
     print("[Retrieval Agent] Fetching relevant medical context...")
     
     # Fetch top 3 documents using our hybrid search + reranking
-    docs = retriever.retrieve_and_rerank(query, top_k=3)
+    docs = get_retriever().retrieve_and_rerank(query, top_k=3)
     
     # Convert Document objects to dicts for the state
     formatted_docs = []
@@ -97,8 +126,12 @@ def qa_node(state: AgentState) -> AgentState:
         "Answer:"
     )
     
-    chain = qa_prompt | llm
-    response = chain.invoke({"context": context_str, "query": query}).content.strip()
+    chain = qa_prompt | get_llm()
+    response = chain.invoke({"context": context_str, "query": query})
+    if hasattr(response, "content"):
+        content = response.content.strip()
+    else:
+        content = str(response).strip()
     
     # Extract sources for Explainability
     sources_list = []
@@ -114,7 +147,7 @@ def qa_node(state: AgentState) -> AgentState:
         })
         sources_text += f"- {source_name} (Confidence: {score:.2f})\n"
         
-    state["final_answer"] = response + sources_text
+    state["final_answer"] = content + sources_text
     state["sources"] = sources_list
     
     return state

@@ -2,10 +2,19 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Default to a local postgres DB if not set, for local development outside docker
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./medibot.db")
+IS_TESTING = os.environ.get("TESTING", "false").lower() == "true"
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+if IS_TESTING:
+    DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite:///./test_medibot.db")
+    connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+else:
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable is not set. Cannot start without a primary database.")
+    if DATABASE_URL.startswith("sqlite"):
+        raise ValueError("SQLite is not allowed as the primary database in production. Please configure PostgreSQL.")
+    connect_args = {}
+
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
