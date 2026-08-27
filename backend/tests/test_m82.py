@@ -158,7 +158,7 @@ def test_readiness_blocked(m82_db):
     headers = get_headers(m82_db, "admin82@test.com", "admin")
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     data = res.json()
-    assert data["readiness_status"] == "BLOCKED"
-    assert data["subsystems"]["medical_rag"] == "BLOCKED"
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: PENDING HUMAN ADMINISTRATIVE REVIEW"
+    assert data["subsystems"]["medical_rag"] == "AUTHORITATIVE PRODUCTION DATASET: PENDING HUMAN ADMINISTRATIVE REVIEW"
     assert data["subsystems"]["facility_network"] == "BLOCKED"
 

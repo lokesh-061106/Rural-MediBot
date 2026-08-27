@@ -114,15 +114,19 @@ def get_knowledge_readiness(
     f_active = sum(1 for f in facs if f.status == "active")
     
     # State Logic
-    medical_rag = "BLOCKED"
+    medical_rag = "AUTHORITATIVE PRODUCTION DATASET: PENDING HUMAN ADMINISTRATIVE REVIEW"
     if k_authoritative > 0 and k_verified > 0 and k_active > 0:
         medical_rag = "CLINICALLY_DATA_READY"
-    elif k_pending > 0 or k_verified > 0:
-        medical_rag = "READY_FOR_REVIEW"
+    elif k_verified > 0 and k_active == 0:
+        medical_rag = "AUTHORITATIVE PRODUCTION DATASET: VERIFIED BUT NOT ACTIVATED"
+    elif k_pending > 0:
+        medical_rag = "AUTHORITATIVE PRODUCTION DATASET: PENDING HUMAN ADMINISTRATIVE REVIEW"
         
     facility_network = "READY" if f_verified > 0 else "BLOCKED"
     
-    overall_state = "CLINICALLY_DATA_READY" if (medical_rag == "CLINICALLY_DATA_READY" and facility_network == "READY") else medical_rag if medical_rag == "READY_FOR_REVIEW" else "BLOCKED"
+    overall_state = "CLINICALLY_DATA_READY" if (medical_rag == "CLINICALLY_DATA_READY" and facility_network == "READY") else medical_rag
+    
+
     
     return {
         "readiness_status": overall_state,

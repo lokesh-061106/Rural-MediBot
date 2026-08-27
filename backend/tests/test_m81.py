@@ -38,7 +38,7 @@ def test_missing_authoritative_dataset(m81_db):
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["readiness_status"] == "BLOCKED"
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: PENDING HUMAN ADMINISTRATIVE REVIEW"
     assert data["knowledge_metrics"]["total_documents"] == 0
 
 def test_unverified_document_rejection_and_metadata(m81_db):
@@ -62,7 +62,7 @@ def test_unverified_document_rejection_and_metadata(m81_db):
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["readiness_status"] == "BLOCKED"
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: PENDING HUMAN ADMINISTRATIVE REVIEW"
     
     # Valid metadata handling
     assert data["knowledge_metrics"]["total_documents"] == 1
@@ -97,7 +97,7 @@ def test_content_hash_integrity_and_provenance(m81_db):
     assert verified_doc["verification_status"] == "VERIFIED"
     assert verified_doc["is_authoritative"] is True
     
-    assert data["readiness_status"] == "READY_FOR_REVIEW"
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: VERIFIED BUT NOT ACTIVATED"
 
 def test_hybrid_search_rejects_unverified_docs():
     from app.retrieval.hybrid_search import get_hybrid_retriever

@@ -94,7 +94,7 @@ export default function AdminKnowledge() {
         <div className="glass-dark rounded-2xl p-6 mb-6">
           <h2 className="font-bold mb-4 text-rose-400">⚠️ Strict Warning</h2>
           <p className="text-sm text-slate-300">
-            Warning: This action asserts that this document is a genuine, authoritative medical/facility source. Falsifying this verification breaks M8 safety rules and may result in clinically dangerous LLM generation.
+            Verification means a human administrator has reviewed the actual document and approved its authority and provenance for clinical use. Do not verify based solely on filename, formatting, or AI-generated claims.
           </p>
         </div>
 
