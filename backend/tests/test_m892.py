@@ -8,17 +8,26 @@ import uuid
 
 client = TestClient(app)
 
+from app.db.database import Base, engine, get_db
+
+@pytest.fixture
+def m892_db():
+    Base.metadata.create_all(bind=engine)
+    db = next(get_db())
+    yield db
+    Base.metadata.drop_all(bind=engine)
+
 def get_admin_headers(db):
     u = db.query(User).filter_by(role="admin").first()
     if not u:
-        u = User(email="admin892@test.com", role="admin", password_hash="dummy")
+        u = User(full_name="Admin M892", email="admin892@test.com", role="admin", password_hash="dummy")
         db.add(u)
         db.commit()
     token = create_access_token(subject=u.id, role="admin")
     return {"Authorization": f"Bearer {token}"}
 
-def test_m892_get_documents_endpoint(m86_db):
-    headers = get_admin_headers(m86_db)
+def test_m892_get_documents_endpoint(m892_db):
+    headers = get_admin_headers(m892_db)
     
     doc = KnowledgeDocument(
         document_id="doc_m892",
@@ -32,8 +41,8 @@ def test_m892_get_documents_endpoint(m86_db):
         source_type="pdf",
         source="backend/data/documents/R1.pdf"
     )
-    m86_db.add(doc)
-    m86_db.commit()
+    m892_db.add(doc)
+    m892_db.commit()
     
     res = client.get("/api/admin/knowledge/documents", headers=headers)
     assert res.status_code == 200
