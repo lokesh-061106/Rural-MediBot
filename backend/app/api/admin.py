@@ -84,3 +84,43 @@ def get_audit_logs(
             "success": log.success
         })
     return result
+
+from app.models.knowledge import KnowledgeDocument
+
+@router.get("/knowledge/readiness")
+def get_knowledge_readiness(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    docs = db.query(KnowledgeDocument).all()
+    
+    total = len(docs)
+    verified = sum(1 for d in docs if d.verification_status == "VERIFIED")
+    authoritative = sum(1 for d in docs if d.is_authoritative)
+    
+    document_details = []
+    for d in docs:
+        document_details.append({
+            "id": d.document_id,
+            "title": d.title,
+            "source": d.source,
+            "source_type": d.source_type,
+            "version": d.version,
+            "content_hash": d.content_hash,
+            "ingestion_status": d.status,
+            "verification_status": d.verification_status,
+            "is_authoritative": d.is_authoritative
+        })
+        
+    readiness_status = "READY" if total > 0 and total == authoritative else "AUTHORITATIVE MEDICAL DATASET NOT AVAILABLE"
+    
+    return {
+        "readiness_status": readiness_status,
+        "metrics": {
+            "total_documents": total,
+            "verified_documents": verified,
+            "authoritative_documents": authoritative
+        },
+        "documents": document_details
+    }
+

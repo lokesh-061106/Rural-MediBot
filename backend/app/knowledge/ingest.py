@@ -167,14 +167,16 @@ def ingest_document(file_path: str, db: Session) -> dict:
         # Deterministic Chunk ID
         chunk_id = f"{document_id}_chunk_{i}"
         
-        # Source Traceability Metadata (M4.1 E)
+        # Source Traceability Metadata (M4.1 E & M8.1)
         chunk_metadata = {
             "document_id": document_id,
             "filename": filename,
             "source": file_path,
             "chunk_index": i,
             "content_hash": content_hash,
-            "title": title
+            "title": title,
+            "is_authoritative": False, # Defaults to false for unverified docs
+            "verification_status": "UNVERIFIED"
         }
         
         documents_to_add.append(Document(page_content=chunk, metadata=chunk_metadata))

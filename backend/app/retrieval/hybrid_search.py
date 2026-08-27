@@ -92,10 +92,12 @@ class HybridRetriever:
         scored_docs = list(zip(retrieved_docs, scores))
         scored_docs.sort(key=lambda x: x[1], reverse=True)
         
-        top_docs = [doc for doc, score in scored_docs[:top_k]]
-        
+        top_docs = []
         for doc, score in scored_docs[:top_k]:
+            if doc.metadata.get("is_authoritative") is False or doc.metadata.get("verification_status") != "VERIFIED":
+                continue # Skip unverified docs entirely
             doc.metadata['relevance_score'] = float(score)
+            top_docs.append(doc)
             
         return top_docs
 
