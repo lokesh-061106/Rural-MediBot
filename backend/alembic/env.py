@@ -19,12 +19,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.database import Base
-from app.models import user
-from app.models import facility
-from app.models import consultation
-from app.models import reminder
-from app.models import sync
+from app.models.user import User
+from app.models.facility import HealthcareFacility
+from app.models.consultation import Consultation
+from app.models.reminder import Reminder
+from app.models.sync import SyncEvent
+from app.models.knowledge import KnowledgeDocument
 
+# This is the MetaData object that Alembic will use
 target_metadata = Base.metadata
 
 def get_url():

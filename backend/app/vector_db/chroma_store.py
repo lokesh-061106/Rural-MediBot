@@ -1,6 +1,6 @@
 import os
 from langchain_chroma import Chroma
-from embeddings.models import get_default_embeddings
+from app.embeddings.providers import get_default_embeddings
 
 # Use a persistent directory inside the vector_db folder
 PERSIST_DIRECTORY = os.path.join(os.path.dirname(__file__), "chroma_data")
@@ -15,10 +15,13 @@ class VectorStoreManager:
             persist_directory=PERSIST_DIRECTORY
         )
 
-    def add_documents(self, documents):
+    def add_documents(self, documents, ids=None):
         """Add documents to the vector store."""
         if documents:
-            self.vector_store.add_documents(documents)
+            if ids:
+                self.vector_store.add_documents(documents, ids=ids)
+            else:
+                self.vector_store.add_documents(documents)
             print(f"Added {len(documents)} document chunks to Vector DB.")
         
     def similarity_search(self, query: str, k: int = 4):
