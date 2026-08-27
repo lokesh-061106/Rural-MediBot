@@ -12,12 +12,26 @@ def get_llm():
     global _llm
     if _llm is None:
         if os.environ.get("USE_MOCK_LLM") == "true":
-            from langchain_core.language_models import FakeListLLM
-            # First response is for triage, second is for QA
-            _llm = FakeListLLM(responses=[
-                '{"risk_level": "GREEN", "confidence": "high", "reason": "Test", "reason_code": "TEST", "emergency": false, "requires_human_care": false, "should_bypass_rag": false}',
-                'Mocked AI response for testing purposes.'
-            ])
+            from langchain_core.language_models import BaseChatModel
+            from langchain_core.messages import BaseMessage, AIMessage
+            from typing import Any, List, Optional
+            from pydantic import Field
+            
+            class InfiniteFakeLLM(BaseChatModel):
+                def _generate(self, messages: List[BaseMessage], stop: Optional[List[str]] = None, run_manager: Optional[Any] = None, **kwargs: Any) -> Any:
+                    from langchain_core.outputs import ChatResult, ChatGeneration
+                    # If triage prompt
+                    if "triage assistant" in str(messages).lower():
+                        content = '{"risk_level": "GREEN", "confidence": "high", "reason": "Test", "reason_code": "TEST", "emergency": false, "requires_human_care": false, "should_bypass_rag": false}'
+                    else:
+                        content = 'Mocked AI response for testing purposes.'
+                    return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
+                    
+                @property
+                def _llm_type(self) -> str:
+                    return "infinite_fake_llm"
+                    
+            _llm = InfiniteFakeLLM()
         else:
             from langchain_groq import ChatGroq
             _llm = ChatGroq(model="llama3-70b-8192", temperature=0)
