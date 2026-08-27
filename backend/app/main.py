@@ -1,13 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from collections import defaultdict
+from typing import Optional
 import uvicorn
-from dotenv import load_dotenv
-load_dotenv()
-
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+import time
 import sys
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # Ensure the app directory is in the path so we can import agents
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -15,19 +17,70 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from agents.graph import run_medibot
 
 app = FastAPI(
-    title="MediBot Backend API",
-    description="FastAPI backend for the MediBot RAG Healthcare Platform",
+    title="Rural MediBot API",
+    description="Backend API for the Rural MediBot System",
     version="1.0.0"
 )
 
-# Allow CORS for the Next.js frontend
+# 1. Environment-driven CORS configuration (Phase 3)
+allowed_origins_str = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
+if not allowed_origins or allowed_origins == ["*"]:
+    if os.environ.get("TESTING", "false").lower() != "true":
+        print("WARNING: CORS is dangerously configured to '*' or empty in a non-test environment.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 2. Simple In-Memory Rate Limiting (Phase 4)
+# Configurable limit: e.g., 50 requests per minute per IP
+RATE_LIMIT = int(os.environ.get("RATE_LIMIT", "50"))
+RATE_LIMIT_WINDOW = 60 # seconds
+
+request_counts = defaultdict(list)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Only rate limit chat or auth endpoints to protect heavy/sensitive routes
+    if request.url.path.startswith("/api/chat") or request.url.path.startswith("/api/auth"):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        
+        # Clean up old timestamps
+        request_counts[client_ip] = [ts for ts in request_counts[client_ip] if now - ts < RATE_LIMIT_WINDOW]
+        
+        if len(request_counts[client_ip]) >= RATE_LIMIT:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please try again later."}
+            )
+            
+        request_counts[client_ip].append(now)
+        
+    response = await call_next(request)
+    
+    # 3. HTTP Security Headers (Phase 3)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    return response
+
+# 4. Global Exception Handler (Phase 5)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    from app.core.logger import observability_logger
+    observability_logger.error(f"Unhandled Exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": "An internal server error occurred."}
+    )
 
 class ChatRequest(BaseModel):
     query: str
@@ -86,6 +139,27 @@ def health_check():
         db_status = "disconnected"
         
     return {"status": "healthy", "database": db_status}
+
+@app.get("/ready")
+def readiness_check():
+    # Verify environment has required variables in production
+    missing_vars = []
+    if os.environ.get("TESTING", "false").lower() != "true":
+        required_vars = ["DATABASE_URL", "JWT_SECRET_KEY", "GROQ_API_KEY"]
+        missing_vars = [var for var in required_vars if not os.environ.get(var)]
+        
+    try:
+        with engine.connect() as conn:
+            pass
+        db_ready = True
+    except Exception:
+        db_ready = False
+        
+    if missing_vars or not db_ready:
+        from fastapi import Response
+        return Response(content="Service Unavailable", status_code=503)
+        
+    return {"status": "ready"}
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -216,7 +290,9 @@ async def chat_endpoint(
             "status": "success"
         }
     except Exception as e:
-        return {"response": f"An error occurred: {str(e)}", "status": "error"}
+        from app.core.logger import observability_logger
+        observability_logger.error(f"Chat Endpoint Error: {str(e)}", exc_info=True)
+        return {"response": "An internal error occurred while processing your request. Please try again later.", "status": "error"}
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

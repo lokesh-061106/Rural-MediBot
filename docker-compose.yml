@@ -6,15 +6,16 @@ services:
     container_name: medibot_db
     restart: always
     environment:
-      POSTGRES_USER: medibot_user
-      POSTGRES_PASSWORD: medibot_pass
-      POSTGRES_DB: medibot_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_USER:-medibot_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-medibot_db}
+    # Do not expose ports to host in production, keep it internal to docker network
+    # ports:
+    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medibot_user -d medibot_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,16 +29,24 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://medibot_user:medibot_pass@db:5432/medibot_db
+      - DATABASE_URL=postgresql://${DB_USER:-medibot_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-medibot_db}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=1440
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      - RATE_LIMIT=${RATE_LIMIT:-50}
+      - FACILITY_STALE_DAYS=${FACILITY_STALE_DAYS:-180}
+      - TESTING=false
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./backend:/app/backend
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    # Removed dev volume mounts for production
 
   frontend:
     build:
@@ -48,10 +57,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - FASTAPI_BACKEND_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -10,6 +10,10 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ ./backend/
 
+# Create a non-root user and switch to it
+RUN useradd -m medibotuser && chown -R medibotuser:medibotuser /app
+USER medibotuser
+
 # Expose the application port
 EXPOSE 8000
 

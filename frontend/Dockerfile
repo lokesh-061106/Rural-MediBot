@@ -9,6 +9,9 @@ COPY . .
 
 RUN npm run build
 
+# Switch to the node user that comes with the image
+USER node
+
 EXPOSE 3000
 
 CMD ["npm", "start"]
