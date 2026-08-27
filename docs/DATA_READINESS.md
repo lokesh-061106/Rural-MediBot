@@ -1,6 +1,6 @@
 # Rural MediBot — Production Data Readiness
 
-> Last updated: M8.3 — Authoritative Data Acquisition & Controlled Ingestion
+> Last updated: M8.4 — Authoritative Data Acquisition & Controlled Production Ingestion
 
 ---
 
@@ -9,8 +9,8 @@
 | Readiness Gate | Status |
 |---|---|
 | Engineering Readiness | ✅ IMPLEMENTED |
-| Data Readiness (Medical) | ❌ BLOCKED — No authoritative dataset provided |
-| Data Readiness (Facility) | ❌ BLOCKED — No authoritative dataset provided |
+| Data Readiness (Medical) | ❌ BLOCKED — AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED |
+| Data Readiness (Facility) | ❌ BLOCKED — AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED |
 | Clinical Readiness | ❌ BLOCKED — Cannot serve clinical guidance without verified data |
 | Deployment Readiness | ⚠️ CONDITIONAL — Software is production-hardened; data is absent |
 
