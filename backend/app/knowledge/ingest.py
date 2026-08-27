@@ -141,6 +141,18 @@ def ingest_document(file_path: str, db: Session, doc_metadata: dict = None) -> d
         initial_status = "VALIDATION_FAILED"
         result["reason"] = "Missing required metadata: publisher"
     
+    pub_date_str = doc_metadata.get("publication_date")
+    pub_date = None
+    if pub_date_str:
+        if isinstance(pub_date_str, str):
+            try:
+                from datetime import datetime
+                pub_date = datetime.strptime(pub_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        else:
+            pub_date = pub_date_str
+
     # Create Document DB Entry
     new_doc = KnowledgeDocument(
         document_id=document_id,
@@ -156,7 +168,7 @@ def ingest_document(file_path: str, db: Session, doc_metadata: dict = None) -> d
         verification_status="UNVERIFIED",
         publisher=publisher,
         source_url=doc_metadata.get("source_url"),
-        publication_date=doc_metadata.get("publication_date")
+        publication_date=pub_date
     )
     db.add(new_doc)
     
