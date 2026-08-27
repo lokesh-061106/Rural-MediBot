@@ -236,29 +236,49 @@ export default function ChatPage() {
                   </div>
                 )}
                 
-                {/* Emergency & Facility Recommendation */}
-                {msg.is_emergency && (
+                {/* M4.2 4-Level Triage Indicators */}
+                {msg.risk_level === 'RED' && (
                   <div className="mt-4 p-4 bg-red-900/60 border-2 border-red-500/80 rounded-xl">
                     <div className={`flex items-center text-red-400 font-bold ${accessibilityMode ? 'text-xl mb-3' : 'mb-2'}`}>
-                      <span className="mr-2">🚨</span> POSSIBLE EMERGENCY
+                      <span className="mr-2">🚨</span> CRITICAL EMERGENCY
                     </div>
-                    <p className={`${accessibilityMode ? 'text-sm' : 'text-xs'} text-red-200 mb-4`}>Your reported symptoms may require urgent medical evaluation.</p>
+                    <p className={`${accessibilityMode ? 'text-sm' : 'text-xs'} text-red-200 mb-4`}>
+                      Your reported symptoms require IMMEDIATE emergency medical evaluation. Do not wait.
+                      <br/><span className="text-red-400 font-semibold mt-2 block">Status: {typeof navigator !== 'undefined' && !navigator.onLine ? 'Offline mode active' : 'Online connected'}</span>
+                    </p>
                     <div className="flex flex-col gap-3">
                       <a href="tel:108" className={`bg-red-600 hover:bg-red-700 text-white text-center rounded-lg font-bold transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>Call Ambulance (108)</a>
-                      <a href="/facilities?emergency=true" className={`bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>Find Nearest Emergency Facility</a>
+                      <a href="/facilities?emergency=true" className={`bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>📍 Find Nearest Emergency Facility</a>
                     </div>
                   </div>
                 )}
                 
-                {!msg.is_emergency && msg.recommended_facility && (
-                  <div className="mt-4 p-3 bg-blue-900/40 border border-blue-500/40 rounded-xl">
-                    <div className="flex items-center text-blue-400 font-bold mb-2">
-                      <span className="mr-2">🏥</span> Recommended: {msg.recommended_facility}
+                {msg.risk_level === 'ORANGE' && (
+                  <div className="mt-4 p-3 bg-orange-900/40 border-l-4 border-orange-500 rounded-r-xl">
+                    <div className="flex items-center text-orange-400 font-bold mb-1">
+                      <span className="mr-2">⚠️</span> URGENT EVALUATION RECOMMENDED
                     </div>
-                    <p className={`${accessibilityMode ? 'text-sm' : 'text-[11px]'} text-blue-200 mb-3`}>Based on your {msg.risk_level} risk level, we recommend visiting a {msg.recommended_facility}.</p>
-                    <a href={`/facilities?type=${encodeURIComponent(msg.recommended_facility)}`} className={`block w-full bg-blue-600 hover:bg-blue-700 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-3 text-base' : 'py-1.5 text-xs'}`}>
-                      Find Nearby {msg.recommended_facility}
-                    </a>
+                    <p className="text-xs text-orange-200 mb-3">Potentially serious situation requiring prompt medical evaluation. Do not delay care.</p>
+                    <a href={`/facilities?type=Hospital`} className="block w-full bg-orange-600 hover:bg-orange-700 text-white text-center rounded-lg font-medium py-1.5 text-xs transition">Find Nearby Hospital</a>
+                  </div>
+                )}
+
+                {msg.risk_level === 'YELLOW' && (
+                  <div className="mt-4 p-3 bg-yellow-900/30 border-l-4 border-yellow-500 rounded-r-xl">
+                    <div className="flex items-center text-yellow-400 font-bold mb-1">
+                      <span className="mr-2">⚕️</span> ROUTINE MEDICAL CARE
+                    </div>
+                    <p className="text-xs text-yellow-200 mb-3">Symptoms may require routine medical attention or monitoring.</p>
+                    <a href={`/facilities?type=PHC`} className="block w-full bg-yellow-600 hover:bg-yellow-700 text-slate-900 text-center rounded-lg font-bold py-1.5 text-xs transition">Find Nearby Clinic (PHC)</a>
+                  </div>
+                )}
+
+                {msg.risk_level === 'GREEN' && msg.role === 'model' && (
+                  <div className="mt-4 p-3 bg-emerald-900/20 border-l-4 border-emerald-500 rounded-r-xl">
+                    <div className="flex items-center text-emerald-400 font-bold mb-1">
+                      <span className="mr-2">ℹ️</span> GENERAL HEALTH GUIDANCE
+                    </div>
+                    <p className="text-[10px] text-emerald-200">No immediate danger detected. This is general guidance, not a medical diagnosis.</p>
                   </div>
                 )}
               </div>

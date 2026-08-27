@@ -12,9 +12,11 @@ def route_triage(state: AgentState):
     """
     Routing logic after the Triage node.
     """
-    if state["is_emergency"]:
+    # M4.2 Deterministic Safety bypass
+    triage_info = state.get("triage", {})
+    if state.get("is_emergency") or triage_info.get("should_bypass_rag"):
         return "end"
-    elif state["query_type"] == "general":
+    elif state.get("query_type") == "general":
         return "qa_node"
     else:
         return "retrieval_node"
@@ -65,11 +67,13 @@ def run_medibot(query: str, thread_id: str = "default_user_1"):
     # Run the graph
     result = medibot_graph.invoke({"query": query}, config=config)
     
+    triage_info = result.get("triage", {})
     return {
         "final_answer": result.get("final_answer", ""),
         "sources": result.get("sources", []),
         "is_emergency": result.get("is_emergency", False),
-        "risk_level": result.get("risk_level", "low"),
+        "risk_level": result.get("risk_level", "GREEN"),
+        "triage": triage_info,
         "recommended_facility": result.get("recommended_facility_type", None)
     }
 

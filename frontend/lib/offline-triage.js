@@ -22,22 +22,27 @@ const EMERGENCY_PATTERNS = [
 ];
 
 export function analyzeQueryOffline(query) {
-  if (!query) return { isEmergency: false, category: 'general' };
+  if (!query) return { isEmergency: false, riskLevel: 'GREEN', category: 'general' };
   
   for (let pattern of EMERGENCY_PATTERNS) {
     if (pattern.test(query)) {
       return { 
         isEmergency: true, 
+        riskLevel: 'RED',
         category: 'emergency',
-        matchedPattern: pattern.toString()
+        matchedPattern: pattern.toString(),
+        reasonCode: 'OFFLINE_EMERGENCY_MATCH'
       };
     }
   }
 
-  // If no emergency detected, fallback to general/unsupported offline state
+  // If no emergency detected, fallback to YELLOW offline state 
+  // since we can't definitively diagnose them as GREEN without the LLM/RAG
   return { 
     isEmergency: false, 
-    category: 'unknown'
+    riskLevel: 'YELLOW',
+    category: 'unknown',
+    reasonCode: 'OFFLINE_CAUTION'
   };
 }
 

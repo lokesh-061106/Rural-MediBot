@@ -18,3 +18,9 @@ class AgentState(TypedDict):
     
     # Flag to determine if the query is an emergency
     is_emergency: bool
+    
+    # Structured triage result
+    triage: Optional[Dict[str, Any]]
+    
+    # Risk level (GREEN, YELLOW, ORANGE, RED)
+    risk_level: Optional[str]

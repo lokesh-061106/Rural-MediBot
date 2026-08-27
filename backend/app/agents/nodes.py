@@ -13,7 +13,11 @@ def get_llm():
     if _llm is None:
         if os.environ.get("USE_MOCK_LLM") == "true":
             from langchain_core.language_models import FakeListLLM
-            _llm = FakeListLLM(responses=["medical Mocked AI response for testing purposes.", "Mocked AI response for testing purposes."])
+            # First response is for triage, second is for QA
+            _llm = FakeListLLM(responses=[
+                '{"risk_level": "GREEN", "confidence": "high", "reason": "Test", "reason_code": "TEST", "emergency": false, "requires_human_care": false, "should_bypass_rag": false}',
+                'Mocked AI response for testing purposes.'
+            ])
         else:
             from langchain_groq import ChatGroq
             _llm = ChatGroq(model="llama3-70b-8192", temperature=0)
@@ -25,47 +29,103 @@ def get_retriever():
         _retriever = get_hybrid_retriever()
     return _retriever
 
+from app.agents.guardrails import analyze_deterministic_safety
+from app.schemas.triage import TriageResult
+import json
+
 def triage_node(state: AgentState) -> AgentState:
     """
-    Triage Agent: Analyzes the query to determine its nature (medical, emergency, or general).
+    Triage Agent: Analyzes the query with deterministic safety checks first, 
+    then uses LLM for structured classification if not RED.
     """
     query = state["query"]
     print(f"[Triage Agent] Analyzing query: '{query}'")
     
+    # 1. Deterministic First-Pass Safety Layer (Phase 2 & 15)
+    deterministic_result = analyze_deterministic_safety(query)
+    if deterministic_result:
+        print(f"[Triage Agent] DETERMINISTIC RED DETECTED: {deterministic_result['reason_code']}")
+        state["triage"] = deterministic_result
+        state["is_emergency"] = True
+        state["risk_level"] = "RED"
+        state["query_type"] = "emergency"
+        state["final_answer"] = "🚨 **MEDICAL EMERGENCY DETECTED** 🚨\nPlease call your local emergency services (108) immediately or go to the nearest emergency room. I am an AI and cannot provide emergency medical assistance."
+        return state
+        
+    # 2. LLM Triage for non-RED cases (Phase 4)
     triage_prompt = PromptTemplate.from_template(
-        "You are a medical triage assistant. Analyze the user's query and categorize it into exactly ONE of these types:\n"
-        "1. 'emergency' (if the query indicates a life-threatening situation, severe pain, or urgent need for a doctor/ambulance)\n"
-        "2. 'medical' (if the query is asking for health information, symptoms, treatments, or medical knowledge)\n"
-        "3. 'general' (if the query is a simple greeting, off-topic, or non-medical)\n\n"
-        "Respond with only the single word category name in lowercase.\n\n"
-        "Query: {query}"
+        "You are a medical triage assistant. Analyze the user's query and categorize it into exactly ONE of these risk levels: GREEN, YELLOW, ORANGE, RED.\n\n"
+        "Definitions:\n"
+        "- GREEN: No immediate danger. General self-care or non-medical query.\n"
+        "- YELLOW: Symptoms may require routine medical attention.\n"
+        "- ORANGE: Potentially serious situation requiring prompt medical evaluation.\n"
+        "- RED: Potential emergency. Seek emergency care immediately.\n\n"
+        "Return a valid JSON object matching this schema:\n"
+        "{{\n"
+        "  \"risk_level\": \"<GREEN|YELLOW|ORANGE|RED>\",\n"
+        "  \"confidence\": \"<high|medium|low>\",\n"
+        "  \"reason\": \"<brief explanation>\",\n"
+        "  \"reason_code\": \"<e.g. ROUTINE_QUERY, POTENTIAL_INFECTION, etc>\",\n"
+        "  \"emergency\": <true/false>,\n"
+        "  \"requires_human_care\": <true/false>,\n"
+        "  \"should_bypass_rag\": <true/false>\n"
+        "}}\n\n"
+        "Query: {query}\n\n"
+        "Output ONLY the JSON object, nothing else."
     )
     
-    chain = triage_prompt | get_llm()
-    response = chain.invoke({"query": query})
-    
-    if hasattr(response, "content"):
-        content = response.content.strip().lower()
-    else:
-        content = str(response).strip().lower()
+    try:
+        chain = triage_prompt | get_llm()
+        response = chain.invoke({"query": query})
         
-    # FakeListLLM might not follow the exact format, ensure it works in tests
-    if "emergency" in content:
-        result_type = "emergency"
-    elif "medical" in content:
-        result_type = "medical"
-    else:
-        result_type = "general"
-    
-    state["query_type"] = result_type
-    state["is_emergency"] = result_type == "emergency"
-    
-    print(f"[Triage Agent] Classified as: {result_type}")
-    
-    # If it's an emergency, we don't need to retrieve documents, we handle it immediately
-    if state["is_emergency"]:
-        state["final_answer"] = "🚨 **MEDICAL EMERGENCY DETECTED** 🚨\nPlease call your local emergency services (like 911) immediately or go to the nearest emergency room. I am an AI and cannot provide emergency medical assistance."
+        content = response.content.strip() if hasattr(response, "content") else str(response).strip()
         
+        # Clean up markdown if the LLM wrapped the JSON in markdown blocks
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+            
+        content = content.strip()
+        
+        # In mock LLM test environments, FakeListLLM might just return "Mocked AI response..."
+        if "Mocked" in content or not content.startswith("{"):
+            raise ValueError("Malformed JSON from LLM")
+            
+        triage_dict = json.loads(content)
+        triage_obj = TriageResult(**triage_dict)
+        triage_data = triage_obj.model_dump()
+        
+    except Exception as e:
+        print(f"[Triage Agent] LLM Triage failed safely: {str(e)}")
+        # Safe deterministic fallback
+        triage_data = {
+            "risk_level": "YELLOW",
+            "confidence": "low",
+            "reason": "Fallback triage due to system error. Please exercise caution.",
+            "reason_code": "SYSTEM_FALLBACK",
+            "emergency": False,
+            "requires_human_care": True,
+            "should_bypass_rag": False
+        }
+
+    # Ensure LLM cannot downgrade a missed RED if it decides it's an emergency
+    if triage_data["risk_level"] == "RED" or triage_data["emergency"]:
+        triage_data["risk_level"] = "RED"
+        triage_data["emergency"] = True
+        triage_data["should_bypass_rag"] = True
+
+    state["triage"] = triage_data
+    state["is_emergency"] = triage_data["emergency"]
+    state["risk_level"] = triage_data["risk_level"]
+    state["query_type"] = "emergency" if triage_data["emergency"] else "medical"
+    
+    if triage_data["should_bypass_rag"]:
+        state["final_answer"] = "🚨 **MEDICAL EMERGENCY DETECTED** 🚨\nPlease call your local emergency services (108) immediately or go to the nearest emergency room. I am an AI and cannot provide emergency medical assistance."
+        
+    print(f"[Triage Agent] Final Classification: {state['risk_level']}")
     return state
 
 def retrieval_node(state: AgentState) -> AgentState:

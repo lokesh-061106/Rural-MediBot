@@ -82,6 +82,7 @@ async def chat_endpoint(request: ChatRequest):
             sources = result.get("sources", [])
             is_emergency = result.get("is_emergency", False)
             risk_level = result.get("risk_level", "low")
+            triage_info = result.get("triage", None)
             recommended_facility = result.get("recommended_facility", None)
         else:
             # Fallback if result is just a string (old behavior)
@@ -89,6 +90,7 @@ async def chat_endpoint(request: ChatRequest):
             sources = []
             is_emergency = False
             risk_level = "low"
+            triage_info = None
             recommended_facility = None
             
         return {
@@ -96,6 +98,7 @@ async def chat_endpoint(request: ChatRequest):
             "sources": sources,
             "is_emergency": is_emergency,
             "risk_level": risk_level,
+            "triage": triage_info,
             "recommended_facility": recommended_facility,
             "status": "success"
         }
