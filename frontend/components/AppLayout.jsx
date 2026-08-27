@@ -6,7 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 const translations = {
   en: { home: "Dashboard", chat: "AI Chat", reports: "Reports", reminders: "Reminders", telemedicine: "Telemedicine", logout: "Logout", language: "Language" },
   hi: { home: "डैशबोर्ड", chat: "AI चैट", reports: "रिपोर्ट", reminders: "अनुस्मारक", telemedicine: "टेलीमेडिसिन", logout: "लॉग आउट", language: "भाषा" },
+  mr: { home: "डॅशबोर्ड", chat: "एआय चॅट", reports: "अहवाल", reminders: "स्मरणपत्रे", telemedicine: "टेलिमेडिसिन", logout: "बाहेर पडा", language: "भाषा" },
   ta: { home: "டாஷ்போர்டு", chat: "AI சேட்", reports: "அறிக்கைகள்", reminders: "நினைவூட்டல்", telemedicine: "டெலிமெடிசின்", logout: "வெளியேறு", language: "மொழி" },
+  or: { home: "ଡ୍ୟାସବୋର୍ଡ", chat: "AI ଚାଟ୍", reports: "ରିପୋର୍ଟ", reminders: "ରିମାଇଣ୍ଡର", telemedicine: "ଟେଲିମେଡିସିନ୍", logout: "ଲଗଆଉଟ୍", language: "ଭାଷା" },
 };
 
 export default function AppLayout({ children }) {
@@ -66,10 +68,10 @@ export default function AppLayout({ children }) {
             <div className="flex items-center gap-2">
               {/* Language switcher */}
               <div className="flex items-center gap-1 glass rounded-lg px-2 py-1">
-                {["en", "hi", "ta"].map((l) => (
+                {["en", "hi", "mr", "ta", "or"].map((l) => (
                   <button key={l} onClick={() => changeLang(l)}
                     className={`text-xs px-2 py-0.5 rounded transition-all ${lang === l ? "bg-sky-500 text-white font-semibold" : "text-slate-400 hover:text-white"}`}>
-                    {l === "en" ? "EN" : l === "hi" ? "हि" : "த"}
+                    {l === "en" ? "EN" : l === "hi" ? "हि" : l === "mr" ? "म" : l === "ta" ? "த" : "ଓ"}
                   </button>
                 ))}
               </div>

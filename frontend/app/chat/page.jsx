@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
+import { VoiceService } from "@/lib/services/VoiceService";
 
 const SAMPLE_MESSAGES = [
-  { role: "model", content: "👋 Hello! I'm your customizable AI assistant. I will act based on the role you define below. I support **English**, **Hindi (हिंदी)**, and **Tamil (தமிழ்)**.\n\n⚠️ I will ONLY answer questions relevant to my assigned role." },
+  { role: "model", content: "👋 Hello! I'm your customizable AI assistant. I will act based on the role you define below. I support **English**, **Hindi (हिंदी)**, **Marathi (मराठी)**, **Tamil (தமிழ்)**, and **Odia (ଓଡ଼ିଆ)**.\n\n⚠️ I will ONLY answer questions relevant to my assigned role." },
 ];
 
 export default function ChatPage() {
@@ -13,11 +14,24 @@ export default function ChatPage() {
   const [lang, setLang] = useState("en");
   const [roleDescription, setRoleDescription] = useState("Software Engineer");
   const [listening, setListening] = useState(false);
+  const [accessibilityMode, setAccessibilityMode] = useState(false);
   const bottomRef = useRef(null);
-  const recognitionRef = useRef(null);
 
   useEffect(() => {
-    setLang(localStorage.getItem("medibot_lang") || "en");
+    const handleStorageChange = () => {
+      setLang(localStorage.getItem("medibot_lang") || "en");
+    };
+    handleStorageChange();
+    window.addEventListener("storage", handleStorageChange);
+    // Periodically check (simple way since AppLayout sets it without event)
+    const interval = setInterval(handleStorageChange, 1000);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -37,11 +51,15 @@ export default function ChatPage() {
         const triageResult = analyzeQueryOffline(text);
         
         if (triageResult.isEmergency) {
-          setMessages((m) => [...m, { role: "model", content: getOfflineEmergencyResponse() }]);
+          const content = getOfflineEmergencyResponse();
+          setMessages((m) => [...m, { role: "model", content, is_emergency: true }]);
+          if (accessibilityMode) VoiceService.speak(content, lang);
         } else {
           // Queue the message to be synced later
           await queueChatMessage({ query: text, thread_id: "default_user_1", roleDescription });
-          setMessages((m) => [...m, { role: "model", content: getOfflineFallbackResponse() }]);
+          const content = getOfflineFallbackResponse();
+          setMessages((m) => [...m, { role: "model", content }]);
+          if (accessibilityMode) VoiceService.speak(content, lang);
         }
       } else {
         // --- ONLINE MODE ---
@@ -49,17 +67,21 @@ export default function ChatPage() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, history, language: lang, roleDescription }),
+          body: JSON.stringify({ query: text, history, language: lang, roleDescription }),
         });
         const data = await res.json();
+        const content = data.response || "Sorry, I couldn't process that.";
         setMessages((m) => [...m, { 
           role: "model", 
-          content: data.response || "Sorry, I couldn't process that.",
+          content: content,
           sources: data.sources || [],
           is_emergency: data.is_emergency,
           risk_level: data.risk_level,
           recommended_facility: data.recommended_facility
         }]);
+        if (accessibilityMode || listening) {
+           VoiceService.speak(content, lang);
+        }
       }
 
       // Save to localStorage (simple history)
@@ -72,28 +94,33 @@ export default function ChatPage() {
   };
 
   const startVoice = () => {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      alert("Voice input not supported in this browser. Please use Chrome.");
-      return;
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    const langMap = { en: "en-US", hi: "hi-IN", ta: "ta-IN" };
-    recognition.lang = langMap[lang] || "en-US";
-    recognition.onstart = () => setListening(true);
-    recognition.onresult = (e) => {
-      const transcript = Array.from(e.results).map((r) => r[0].transcript).join("");
-      setInput(transcript);
-    };
-    recognition.onend = () => { setListening(false); };
-    recognition.onerror = () => setListening(false);
-    recognition.start();
-    recognitionRef.current = recognition;
+    setListening(true);
+    VoiceService.startListening(
+      lang,
+      (transcript, isFinal) => {
+        setInput(transcript);
+        if (isFinal) {
+           setTimeout(() => {
+             setListening(false);
+             sendMessage(transcript);
+           }, 500);
+        }
+      },
+      (err) => {
+        console.error(err);
+        setListening(false);
+        alert(err.message || "Failed to start voice recognition.");
+      },
+      () => {
+        setListening(false);
+      }
+    );
   };
 
-  const stopVoice = () => { recognitionRef.current?.stop(); setListening(false); };
+  const stopVoice = () => {
+    VoiceService.stopListening();
+    setListening(false);
+  };
 
   const formatMessage = (text) => {
     return text
@@ -105,20 +132,39 @@ export default function ChatPage() {
 
   const quickSymptoms = ["Tell me a joke", "Explain a concept", "Give me advice", "Write some code", "Analyze this"];
 
+  const texts = {
+    en: { tap: "TAP TO SPEAK", typing: "Or type your question...", ai: "Assistant" },
+    hi: { tap: "बोलने के लिए टैप करें", typing: "या अपना सवाल टाइप करें...", ai: "सहायक" },
+    mr: { tap: "बोलण्यासाठी टॅप करा", typing: "किंवा तुमचा प्रश्न टाइप करा...", ai: "सहाय्यक" },
+    ta: { tap: "பேச தட்டவும்", typing: "அல்லது உங்கள் கேள்வியை தட்டச்சு செய்யவும்...", ai: "உதவியாளர்" },
+    or: { tap: "କହିବା ପାଇଁ ଟ୍ୟାପ୍ କରନ୍ତୁ", typing: "କିମ୍ବା ଆପଣଙ୍କର ପ୍ରଶ୍ନ ଟାଇପ୍ କରନ୍ତୁ...", ai: "ସହାୟକ" }
+  };
+  const t = texts[lang] || texts.en;
+
   return (
     <AppLayout>
-      <div className="flex flex-col h-[calc(100vh-10rem)] max-w-4xl mx-auto">
+      <div className={`flex flex-col mx-auto ${accessibilityMode ? 'max-w-3xl h-[calc(100vh-8rem)] text-lg' : 'max-w-4xl h-[calc(100vh-10rem)]'}`}>
         {/* Header */}
         <div className="flex flex-col mb-4 gap-2">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-black">🤖 AI Role-based Assistant</h1>
+              <h1 className={`${accessibilityMode ? 'text-3xl' : 'text-2xl'} font-black`}>🤖 AI Role-based Assistant</h1>
               <p className="text-slate-400 text-sm">Powered by Google Gemini / Groq</p>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => setMessages(SAMPLE_MESSAGES)} className="glass px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white transition-all">Clear Chat</button>
+            <div className="flex gap-2 items-center">
+              <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
+                <input 
+                   type="checkbox" 
+                   checked={accessibilityMode} 
+                   onChange={(e) => setAccessibilityMode(e.target.checked)}
+                   className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-sky-500"
+                />
+                Rural Accessibility Mode
+              </label>
+              <button onClick={() => setMessages(SAMPLE_MESSAGES)} className="glass px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white transition-all">Clear</button>
             </div>
           </div>
+          {!accessibilityMode && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-300">Bot Role:</span>
             <input 
@@ -129,9 +175,11 @@ export default function ChatPage() {
               placeholder="e.g. Math Teacher, Software Engineer, Fitness Coach"
             />
           </div>
+          )}
         </div>
 
         {/* Quick actions */}
+        {!accessibilityMode && (
         <div className="flex gap-2 flex-wrap mb-4">
           {quickSymptoms.map((s) => (
             <button key={s} onClick={() => sendMessage(s)}
@@ -140,29 +188,36 @@ export default function ChatPage() {
             </button>
           ))}
         </div>
+        )}
 
         {/* Chat messages */}
-        <div className="flex-1 glass-dark rounded-2xl p-4 overflow-y-auto space-y-4 mb-4">
+        <div className={`flex-1 glass-dark rounded-2xl p-4 overflow-y-auto space-y-4 mb-4 ${accessibilityMode ? 'border-2 border-slate-700' : ''}`}>
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] ${msg.role === "user"
-                ? "bg-gradient-to-r from-sky-600 to-blue-600 rounded-2xl rounded-tr-sm px-4 py-3 text-white text-sm"
-                : "glass rounded-2xl rounded-tl-sm px-4 py-3 text-slate-200 text-sm"}`}>
+                ? "bg-gradient-to-r from-sky-600 to-blue-600 rounded-2xl rounded-tr-sm px-4 py-3 text-white"
+                : "glass rounded-2xl rounded-tl-sm px-4 py-3 text-slate-200"} ${accessibilityMode ? 'text-lg' : 'text-sm'}`}>
+                
                 {msg.role === "model" && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-5 h-5 bg-gradient-to-br from-sky-400 to-blue-600 rounded-full flex items-center justify-center text-xs">AI</div>
-                    <span className="text-xs text-sky-400 font-semibold">Assistant</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gradient-to-br from-sky-400 to-blue-600 rounded-full flex items-center justify-center text-xs font-bold text-white">AI</div>
+                      <span className="text-xs text-sky-400 font-semibold">{t.ai}</span>
+                    </div>
+                    {VoiceService.isSupported() && (
+                      <button onClick={() => VoiceService.speak(msg.content, lang)} className="text-slate-400 hover:text-white" title="Read aloud">
+                        🔊
+                      </button>
+                    )}
                   </div>
                 )}
-                <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
+                
+                <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} className="leading-relaxed" />
                 
                 {/* Explainable AI: Sources */}
-                {msg.sources && msg.sources.length > 0 && (
+                {!accessibilityMode && msg.sources && msg.sources.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-slate-700/50">
                     <p className="text-xs font-semibold text-sky-400 mb-2 flex items-center gap-1">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
                       Verified Medical Sources
                     </p>
                     <div className="flex flex-col gap-2">
@@ -183,25 +238,25 @@ export default function ChatPage() {
                 
                 {/* Emergency & Facility Recommendation */}
                 {msg.is_emergency && (
-                  <div className="mt-4 p-3 bg-red-900/40 border border-red-500/50 rounded-xl">
-                    <div className="flex items-center text-red-400 font-bold mb-2">
+                  <div className="mt-4 p-4 bg-red-900/60 border-2 border-red-500/80 rounded-xl">
+                    <div className={`flex items-center text-red-400 font-bold ${accessibilityMode ? 'text-xl mb-3' : 'mb-2'}`}>
                       <span className="mr-2">🚨</span> POSSIBLE EMERGENCY
                     </div>
-                    <p className="text-xs text-red-200 mb-3">Your reported symptoms may require urgent medical evaluation.</p>
-                    <div className="flex flex-col gap-2">
-                      <a href="tel:108" className="bg-red-600 hover:bg-red-700 text-white text-center py-2 rounded-lg text-sm font-bold transition">Call Ambulance (108)</a>
-                      <a href="/facilities?emergency=true" className="bg-slate-800 hover:bg-slate-700 text-white text-center py-2 rounded-lg text-sm font-medium transition">Find Nearest Emergency Facility</a>
+                    <p className={`${accessibilityMode ? 'text-sm' : 'text-xs'} text-red-200 mb-4`}>Your reported symptoms may require urgent medical evaluation.</p>
+                    <div className="flex flex-col gap-3">
+                      <a href="tel:108" className={`bg-red-600 hover:bg-red-700 text-white text-center rounded-lg font-bold transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>Call Ambulance (108)</a>
+                      <a href="/facilities?emergency=true" className={`bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>Find Nearest Emergency Facility</a>
                     </div>
                   </div>
                 )}
                 
                 {!msg.is_emergency && msg.recommended_facility && (
-                  <div className="mt-4 p-3 bg-blue-900/30 border border-blue-500/30 rounded-xl">
-                    <div className="flex items-center text-blue-400 font-bold mb-1">
-                      <span className="mr-2">🏥</span> Recommended Care Level: {msg.recommended_facility}
+                  <div className="mt-4 p-3 bg-blue-900/40 border border-blue-500/40 rounded-xl">
+                    <div className="flex items-center text-blue-400 font-bold mb-2">
+                      <span className="mr-2">🏥</span> Recommended: {msg.recommended_facility}
                     </div>
-                    <p className="text-[11px] text-blue-200 mb-3">Based on your {msg.risk_level} risk level symptoms, we recommend visiting a {msg.recommended_facility}.</p>
-                    <a href={`/facilities?type=${encodeURIComponent(msg.recommended_facility)}`} className="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-1.5 rounded-lg text-xs font-medium transition">
+                    <p className={`${accessibilityMode ? 'text-sm' : 'text-[11px]'} text-blue-200 mb-3`}>Based on your {msg.risk_level} risk level, we recommend visiting a {msg.recommended_facility}.</p>
+                    <a href={`/facilities?type=${encodeURIComponent(msg.recommended_facility)}`} className={`block w-full bg-blue-600 hover:bg-blue-700 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-3 text-base' : 'py-1.5 text-xs'}`}>
                       Find Nearby {msg.recommended_facility}
                     </a>
                   </div>
@@ -226,24 +281,48 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div className="flex gap-2">
-          <button onClick={listening ? stopVoice : startVoice}
-            className={`glass p-3 rounded-xl transition-all ${listening ? "bg-red-500/20 border-red-500/50 text-red-400 animate-pulse" : "text-slate-400 hover:text-sky-400 hover:border-sky-500/30"} border border-transparent`}
-            title={listening ? "Stop listening" : "Voice input"}>
-            🎙️
-          </button>
-          <input
-            className="input-field flex-1"
-            placeholder={listening ? "🎙️ Listening..." : lang === "hi" ? "यहाँ टाइप करें..." : lang === "ta" ? "இங்கே தட்டச்சு செய்யவும்..." : "Type your message here..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-          />
-          <button onClick={() => sendMessage()} disabled={loading || !input.trim()} className="btn-primary px-5 py-3 disabled:opacity-50 disabled:cursor-not-allowed">
-            Send
-          </button>
-        </div>
+        {/* Input Area */}
+        {accessibilityMode ? (
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={listening ? stopVoice : startVoice}
+              className={`w-full py-8 rounded-2xl flex flex-col items-center justify-center transition-all ${listening ? "bg-red-500/20 border-2 border-red-500 text-red-400 animate-pulse" : "bg-sky-600 hover:bg-sky-500 text-white shadow-lg"}`}
+            >
+              <span className="text-4xl mb-2">🎤</span>
+              <span className="font-bold text-xl tracking-wide">{listening ? "LISTENING..." : t.tap}</span>
+            </button>
+            <div className="flex gap-2">
+              <input
+                className="input-field flex-1 text-lg py-3"
+                placeholder={t.typing}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+              />
+              <button onClick={() => sendMessage()} disabled={loading || !input.trim()} className="btn-primary px-6 font-bold disabled:opacity-50 text-lg">
+                Send
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={listening ? stopVoice : startVoice}
+              className={`glass p-3 rounded-xl transition-all ${listening ? "bg-red-500/20 border-red-500/50 text-red-400 animate-pulse" : "text-slate-400 hover:text-sky-400 hover:border-sky-500/30"} border border-transparent`}
+              title={listening ? "Stop listening" : "Voice input"}>
+              🎤
+            </button>
+            <input
+              className="input-field flex-1"
+              placeholder={listening ? "🎙️ Listening..." : t.typing}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+            />
+            <button onClick={() => sendMessage()} disabled={loading || !input.trim()} className="btn-primary px-5 py-3 disabled:opacity-50">
+              Send
+            </button>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
