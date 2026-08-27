@@ -1,7 +1,14 @@
 import { jwtVerify } from "jose";
 
+const secretKeyString = process.env.JWT_SECRET_KEY;
+if (!secretKeyString || secretKeyString.length < 32 || secretKeyString === "CHANGE_ME_IN_PRODUCTION") {
+  const isBuild = process.env.npm_lifecycle_event === "build" || process.env.NEXT_PHASE === "phase-production-build";
+  if (process.env.NODE_ENV === "production" && !isBuild) {
+    throw new Error("CRITICAL: JWT_SECRET_KEY must be set securely in production.");
+  }
+}
 const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET_KEY || "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+  secretKeyString || "test_secret_key_that_is_at_least_thirty_two_chars_long"
 );
 
 export async function verifyToken(token) {

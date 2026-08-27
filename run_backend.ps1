@@ -10,5 +10,5 @@ pip install langchain-groq -q
 
 # Run the backend
 Write-Host "Starting FastAPI Server on http://localhost:8000" -ForegroundColor Green
-$env:PYTHONPATH = ".."
-python main.py
+$env:PYTHONPATH = "."
+python -m app.main

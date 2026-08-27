@@ -5,7 +5,12 @@ from typing import Optional, Any, Union
 from jose import jwt
 
 ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7") # Fallback for dev only
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not SECRET_KEY or len(SECRET_KEY) < 32 or SECRET_KEY == "CHANGE_ME_IN_PRODUCTION":
+    if os.environ.get("TESTING", "false").lower() != "true":
+        raise ValueError("CRITICAL: JWT_SECRET_KEY must be set securely in production.")
+    else:
+        SECRET_KEY = "test_secret_key_that_is_at_least_thirty_two_chars_long"
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')

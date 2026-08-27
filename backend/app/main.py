@@ -36,6 +36,9 @@ from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.sync import router as sync_router
 from app.api.facilities import router as facilities_router
+from app.api.admin import router as admin_router
+from app.api.reminders import router as reminders_router
+from app.api.doctor import router as doctor_router
 from app.db.database import engine, Base
 
 # Optional: Create tables if not using Alembic (for quick testing), but we use Alembic
@@ -46,6 +49,9 @@ app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(sync_router, prefix="/api/sync", tags=["sync"])
 app.include_router(facilities_router, prefix="/api/facilities", tags=["facilities"])
+app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+app.include_router(reminders_router, prefix="/api/reminders", tags=["reminders"])
+app.include_router(doctor_router, prefix="/api/doctor", tags=["doctor"])
 
 
 @app.get("/")

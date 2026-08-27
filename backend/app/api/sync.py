@@ -23,8 +23,9 @@ class SyncResponse(BaseModel):
     failed_client_ids: List[str]
     status: str
 
-# In a real app we'd map this to a DB table like SyncEvent.
-# For M2, we process them idempotently and return success.
+from app.models.sync import SyncEvent
+import dateutil.parser
+
 @router.post("/events", response_model=SyncResponse)
 def sync_events(
     batch: SyncBatchRequest,
@@ -32,24 +33,41 @@ def sync_events(
     db: Session = Depends(get_db)
 ):
     """
-    Receives a batch of offline events (health events, chat queries) 
-    and processes them. Implements idempotency by checking client_id.
+    Receives a batch of offline events and processes them.
+    Implements idempotency by checking client_id.
     """
     synced = []
     failed = []
     
     for event in batch.events:
         try:
-            # Here we would normally insert into a Postgres SyncEvent table
-            # verifying that (user_id, client_id) is unique.
-            # Example: 
-            # if event.event_type == 'health_event':
-            #     process_health_event(event)
+            # Idempotency check
+            existing = db.query(SyncEvent).filter(SyncEvent.client_id == event.client_id).first()
+            if existing:
+                synced.append(event.client_id)
+                continue
+                
+            try:
+                client_time = dateutil.parser.isoparse(event.created_at)
+            except Exception:
+                client_time = datetime.utcnow()
+                
+            new_sync = SyncEvent(
+                user_id=current_user.id,
+                client_id=event.client_id,
+                event_type=event.event_type,
+                payload=event.payload,
+                client_created_at=client_time,
+                server_synced_at=datetime.utcnow()
+            )
+            db.add(new_sync)
+            db.commit()
             
-            # Since this is the M2 foundation, we acknowledge them safely
-            # to clear the client queue.
+            # Additional processing based on event_type could go here.
+            
             synced.append(event.client_id)
         except Exception as e:
+            db.rollback()
             print(f"Error syncing event {event.client_id}: {e}")
             failed.append(event.client_id)
             

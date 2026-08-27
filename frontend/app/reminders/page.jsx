@@ -1,33 +1,117 @@
 "use client";
 import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
+import { openDB } from "idb";
+import { useConnectivity } from "@/hooks/useConnectivity";
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState([]);
-  const [form, setForm] = useState({ name: "", dose: "", time: "08:00", frequency: "Daily", notes: "" });
+  const [form, setForm] = useState({ medicine_name: "", dose: "", time: "08:00", frequency: "Daily", notes: "" });
   const [showForm, setShowForm] = useState(false);
+  const { isOnline } = useConnectivity();
 
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("medibot_reminders") || "[]");
-    setReminders(saved);
-  }, []);
-
-  const save = (updated) => {
-    setReminders(updated);
-    localStorage.setItem("medibot_reminders", JSON.stringify(updated));
+  const initDB = async () => {
+    return openDB("medibot-reminders-db", 1, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains("reminders")) {
+          db.createObjectStore("reminders", { keyPath: "id" });
+        }
+      }
+    });
   };
 
-  const addReminder = (e) => {
+  const fetchReminders = async () => {
+    try {
+      if (isOnline) {
+        const res = await fetch("/api/reminders");
+        if (res.ok) {
+          const data = await res.json();
+          setReminders(data);
+          
+          const db = await initDB();
+          const tx = db.transaction("reminders", "readwrite");
+          await tx.store.clear();
+          for (let r of data) {
+            await tx.store.put(r);
+          }
+          await tx.done;
+          return;
+        }
+      }
+      // Fallback to IndexedDB
+      const db = await initDB();
+      const cached = await db.getAll("reminders");
+      setReminders(cached);
+    } catch (e) {
+      console.error(e);
+      // Fallback to IndexedDB
+      const db = await initDB();
+      const cached = await db.getAll("reminders");
+      setReminders(cached);
+    }
+  };
+
+  useEffect(() => {
+    fetchReminders();
+  }, [isOnline]);
+
+  const addReminder = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
-    const newReminder = { ...form, id: Date.now(), active: true, createdAt: new Date().toISOString() };
-    save([...reminders, newReminder]);
-    setForm({ name: "", dose: "", time: "08:00", frequency: "Daily", notes: "" });
+    if (!form.medicine_name.trim()) return;
+    
+    try {
+      if (isOnline) {
+        const res = await fetch("/api/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form)
+        });
+        if (res.ok) {
+          fetchReminders();
+        }
+      } else {
+        // queue for offline sync would happen here via /api/sync/events
+        alert("Must be online to create new reminders currently.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    setForm({ medicine_name: "", dose: "", time: "08:00", frequency: "Daily", notes: "" });
     setShowForm(false);
   };
 
-  const toggle = (id) => save(reminders.map(r => r.id === id ? { ...r, active: !r.active } : r));
-  const remove = (id) => save(reminders.filter(r => r.id !== id));
+  const toggle = async (id, currentActive) => {
+    try {
+      if (isOnline) {
+        const res = await fetch(`/api/reminders/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: !currentActive })
+        });
+        if (res.ok) {
+          fetchReminders();
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      if (isOnline) {
+        const res = await fetch(`/api/reminders/${id}`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          fetchReminders();
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const frequencies = ["Daily", "Twice Daily", "Weekly", "As Needed"];
 
@@ -43,6 +127,12 @@ export default function RemindersPage() {
             + Add Reminder
           </button>
         </div>
+        
+        {!isOnline && (
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 text-sm rounded-lg">
+            Offline mode. Showing cached reminders. Edits are disabled until connectivity returns.
+          </div>
+        )}
 
         {/* Add Form */}
         {showForm && (
@@ -53,7 +143,7 @@ export default function RemindersPage() {
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">Medication Name *</label>
                   <input required className="input-field" placeholder="e.g. Paracetamol"
-                    value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                    value={form.medicine_name} onChange={(e) => setForm({ ...form, medicine_name: e.target.value })} />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">Dose</label>
@@ -81,7 +171,7 @@ export default function RemindersPage() {
                   value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
               <div className="flex gap-3">
-                <button type="submit" className="btn-primary">Save Reminder</button>
+                <button type="submit" className="btn-primary" disabled={!isOnline}>Save Reminder</button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>
             </form>
@@ -105,17 +195,17 @@ export default function RemindersPage() {
                     💊
                   </div>
                   <div>
-                    <p className="font-bold">{r.name} {r.dose && <span className="text-slate-400 text-sm font-normal">· {r.dose}</span>}</p>
+                    <p className="font-bold">{r.medicine_name} {r.dose && <span className="text-slate-400 text-sm font-normal">· {r.dose}</span>}</p>
                     <p className="text-sm text-slate-400">{r.time} · {r.frequency}</p>
                     {r.notes && <p className="text-xs text-slate-500 mt-0.5">{r.notes}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => toggle(r.id)}
+                  <button onClick={() => toggle(r.id, r.active)} disabled={!isOnline}
                     className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${r.active ? "border-emerald-500/30 text-emerald-400 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30" : "border-slate-600 text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-400"}`}>
                     {r.active ? "Pause" : "Resume"}
                   </button>
-                  <button onClick={() => remove(r.id)} className="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all">
+                  <button onClick={() => remove(r.id)} disabled={!isOnline} className="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all">
                     Remove
                   </button>
                 </div>

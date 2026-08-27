@@ -1,12 +1,33 @@
 "use client";
+import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 
 export default function AdminDashboard() {
+  const [data, setData] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/admin/overview").then(res => res.json()),
+      fetch("/api/admin/audit-logs?limit=5").then(res => res.json())
+    ]).then(([overview, auditLogs]) => {
+      setData(overview);
+      setLogs(auditLogs || []);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <AppLayout><div className="p-8">Loading admin data...</div></AppLayout>;
+
   const stats = [
-    { label: "Total Users", value: "1,204", color: "from-sky-500/20 to-blue-500/20 text-sky-400 border-sky-500/30" },
-    { label: "Active Doctors", value: "45", color: "from-emerald-500/20 to-green-500/20 text-emerald-400 border-emerald-500/30" },
-    { label: "AI Consultations", value: "8,932", color: "from-purple-500/20 to-violet-500/20 text-purple-400 border-purple-500/30" },
-    { label: "Telemedicine Calls", value: "1,420", color: "from-rose-500/20 to-pink-500/20 text-rose-400 border-rose-500/30" },
+    { label: "Total Users", value: data?.stats?.total_users || 0, color: "from-sky-500/20 to-blue-500/20 text-sky-400 border-sky-500/30" },
+    { label: "Active Doctors", value: data?.stats?.active_doctors || 0, color: "from-emerald-500/20 to-green-500/20 text-emerald-400 border-emerald-500/30" },
+    { label: "AI Consultations", value: data?.stats?.ai_consultations || 0, color: "from-purple-500/20 to-violet-500/20 text-purple-400 border-purple-500/30" },
+    { label: "Total Facilities", value: data?.stats?.total_facilities || 0, color: "from-rose-500/20 to-pink-500/20 text-rose-400 border-rose-500/30" },
   ];
 
   return (
@@ -30,12 +51,7 @@ export default function AdminDashboard() {
           <div className="glass-dark rounded-2xl p-6">
             <h2 className="font-bold mb-4">System Status</h2>
             <div className="space-y-4">
-              {[
-                { name: "Gemini AI API", status: "Operational", color: "text-emerald-400" },
-                { name: "PostgreSQL Database", status: "Operational", color: "text-emerald-400" },
-                { name: "Jitsi Telemedicine", status: "Operational", color: "text-emerald-400" },
-                { name: "Email Service", status: "Degraded", color: "text-yellow-400" },
-              ].map(s => (
+              {(data?.system_status || []).map(s => (
                 <div key={s.name} className="flex justify-between items-center border-b border-white/5 pb-2 last:border-0 last:pb-0">
                   <span className="text-slate-300 text-sm">{s.name}</span>
                   <span className={`text-xs font-bold ${s.color}`}>● {s.status}</span>
@@ -45,16 +61,18 @@ export default function AdminDashboard() {
           </div>
 
           <div className="glass-dark rounded-2xl p-6">
-            <h2 className="font-bold mb-4">Recent System Alerts</h2>
+            <h2 className="font-bold mb-4">Recent Audit Events</h2>
             <div className="space-y-3">
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                <p className="text-red-400 text-sm font-semibold">High API Latency</p>
-                <p className="text-xs text-slate-400 mt-1">Gemini API response time exceeded 2000ms at 10:45 AM.</p>
-              </div>
-              <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl">
-                <p className="text-sky-400 text-sm font-semibold">New Doctor Registration</p>
-                <p className="text-xs text-slate-400 mt-1">Dr. Michael Chen is pending approval.</p>
-              </div>
+              {logs.length === 0 && <p className="text-sm text-slate-400">No events found.</p>}
+              {logs.map(log => (
+                <div key={log.id} className="p-3 bg-white/5 border border-white/10 rounded-xl flex flex-col gap-1">
+                  <div className="flex justify-between">
+                    <span className="text-sky-400 text-sm font-semibold">{log.action}</span>
+                    <span className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-slate-400">By: {log.user_email} | Resource: {log.resource} ({log.resource_id})</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

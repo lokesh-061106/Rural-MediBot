@@ -129,3 +129,43 @@ def update_facility(
     db.commit()
     db.refresh(db_facility)
     return db_facility
+
+@router.delete("/{facility_id}", response_model=dict)
+def delete_facility(
+    facility_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    from app.models.user import AuditLog
+    db_facility = db.query(HealthcareFacility).filter(HealthcareFacility.id == facility_id).first()
+    if not db_facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+        
+    db_facility.status = "inactive"
+    db.commit()
+    
+    log = AuditLog(user_id=current_user.id, action="FACILITY_DEACTIVATED", resource="Facility", resource_id=str(facility_id))
+    db.add(log)
+    db.commit()
+    
+    return {"status": "success", "message": "Facility deactivated successfully"}
+
+@router.post("/{facility_id}/reactivate", response_model=dict)
+def reactivate_facility(
+    facility_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    from app.models.user import AuditLog
+    db_facility = db.query(HealthcareFacility).filter(HealthcareFacility.id == facility_id).first()
+    if not db_facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+        
+    db_facility.status = "active"
+    db.commit()
+    
+    log = AuditLog(user_id=current_user.id, action="FACILITY_REACTIVATED", resource="Facility", resource_id=str(facility_id))
+    db.add(log)
+    db.commit()
+    
+    return {"status": "success", "message": "Facility reactivated successfully"}
