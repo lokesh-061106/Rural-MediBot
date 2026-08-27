@@ -12,8 +12,8 @@ else:
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL environment variable is not set. Cannot start without a primary database.")
     if DATABASE_URL.startswith("sqlite"):
-        raise ValueError("SQLite is not allowed as the primary database in production. Please configure PostgreSQL.")
-    connect_args = {}
+        print("WARNING: SQLite is used as the primary database in production. This is NOT recommended for production, but permitted for a demo.")
+    connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
