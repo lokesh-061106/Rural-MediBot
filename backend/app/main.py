@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from pydantic import BaseModel
+from typing import Optional
 import sys
 import os
 
@@ -32,6 +33,7 @@ class ChatRequest(BaseModel):
     query: str
     thread_id: str = "default_user_1"
     language: str = "en"
+    conversation_id: Optional[int] = None
 
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
@@ -40,6 +42,8 @@ from app.api.facilities import router as facilities_router
 from app.api.admin import router as admin_router
 from app.api.reminders import router as reminders_router
 from app.api.doctor import router as doctor_router
+from app.api.conversations import router as conversations_router
+from app.api.patient_context import router as patient_context_router
 from app.db.database import engine, Base
 
 # Optional: Create tables if not using Alembic (for quick testing), but we use Alembic
@@ -48,13 +52,13 @@ from app.db.database import engine, Base
 # Include API Routers
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
-app.include_router(sync_router, prefix="/api/sync", tags=["sync"])
 app.include_router(facilities_router, prefix="/api/facilities", tags=["facilities"])
+app.include_router(doctor_router, prefix="/api/doctor", tags=["doctor"])
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(reminders_router, prefix="/api/reminders", tags=["reminders"])
-app.include_router(doctor_router, prefix="/api/doctor", tags=["doctor"])
-
-
+app.include_router(sync_router, prefix="/api/sync", tags=["sync"])
+app.include_router(conversations_router, prefix="/api/conversations", tags=["conversations"])
+app.include_router(patient_context_router, prefix="/api/patient-context", tags=["patient-context"])
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "MediBot API is running"}
@@ -71,11 +75,61 @@ def health_check():
         
     return {"status": "healthy", "database": db_status}
 
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.api.optional_deps import get_optional_user
+from app.models.user import User
+from app.models.memory import Conversation, Message
+from app.agents.graph import run_medibot
+
+from app.memory.persistence import MemoryService
+
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
     try:
+        conversation_id = request.conversation_id
+        
+        # Verify ownership if provided
+        if conversation_id and current_user:
+            conv = MemoryService.get_conversation(db, conversation_id, current_user.id)
+            if not conv:
+                # Security: do not leak existence of other users' conversations
+                conversation_id = None
+        
+        # Create conversation automatically if missing but authenticated
+        if not conversation_id and current_user:
+            conv = MemoryService.create_conversation(db, current_user.id, request.query[:50], request.language)
+            conversation_id = conv.id
+            
+        # Persist user message
+        if conversation_id and current_user:
+            MemoryService.save_message(
+                db, 
+                conversation_id=conversation_id, 
+                role="user", 
+                content=request.query, 
+                language=request.language
+            )
+
         # Run the LangGraph orchestration
-        result = run_medibot(request.query, request.thread_id, request.language)
+        user_id = current_user.id if current_user else None
+        
+        # Use conversation_id to isolate LangGraph short-lived execution state
+        graph_thread_id = f"conv_{conversation_id}" if conversation_id else request.thread_id
+        
+        result = run_medibot(
+            query=request.query, 
+            thread_id=graph_thread_id, 
+            language=request.language,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            db=db
+        )
         
         # result is now a dictionary containing final_answer and sources
         if isinstance(result, dict):
@@ -94,6 +148,19 @@ async def chat_endpoint(request: ChatRequest):
             triage_info = None
             recommended_facility = None
             
+        # Persist assistant response
+        if conversation_id and current_user:
+            reason_code = "emergency" if is_emergency else "standard"
+            MemoryService.save_message(
+                db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=final_answer,
+                language=request.language,
+                risk_level=risk_level,
+                reason_code=reason_code
+            )
+            
         return {
             "response": final_answer,
             "sources": sources,
@@ -102,6 +169,7 @@ async def chat_endpoint(request: ChatRequest):
             "triage": triage_info,
             "recommended_facility": recommended_facility,
             "language": request.language,
+            "conversation_id": conversation_id,
             "status": "success"
         }
     except Exception as e:

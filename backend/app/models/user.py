@@ -27,6 +27,10 @@ class User(Base):
     
     profile = relationship("UserProfile", back_populates="user", uselist=False)
 
+    # M4.4 Memory & Context
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+    patient_context = relationship("PatientContext", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
     

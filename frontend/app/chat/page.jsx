@@ -15,6 +15,13 @@ export default function ChatPage() {
   const [roleDescription, setRoleDescription] = useState("Software Engineer");
   const [listening, setListening] = useState(false);
   const [accessibilityMode, setAccessibilityMode] = useState(false);
+  const [conversationId, setConversationId] = useState(null);
+  
+  // New State for Conversations Sidebar
+  const [conversations, setConversations] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -30,6 +37,58 @@ export default function ChatPage() {
       clearInterval(interval);
     };
   }, []);
+
+  // Fetch all conversations on mount
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch("/api/conversations");
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch conversations", err);
+    }
+  };
+
+  const startNewConversation = () => {
+    setConversationId(null);
+    setMessages(SAMPLE_MESSAGES);
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  };
+
+  const loadConversation = async (id) => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/conversations/${id}/messages`);
+      if (res.ok) {
+        const msgs = await res.json();
+        setConversationId(id);
+        if (msgs.length > 0) {
+           const formatted = msgs.map(m => ({
+              role: m.role === 'user' ? 'user' : 'model',
+              content: m.content,
+              is_emergency: m.risk_level === 'RED',
+              risk_level: m.risk_level
+           }));
+           setMessages(formatted);
+        } else {
+           setMessages(SAMPLE_MESSAGES);
+        }
+      } else {
+        alert("Failed to load conversation history.");
+      }
+    } catch (err) {
+      alert("Network error while loading conversation.");
+    } finally {
+      setHistoryLoading(false);
+      if (window.innerWidth < 768) setSidebarOpen(false);
+    }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -67,9 +126,14 @@ export default function ChatPage() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: text, history, language: lang, roleDescription }),
+          body: JSON.stringify({ query: text, history, language: lang, roleDescription, conversation_id: conversationId }),
         });
         const data = await res.json();
+        
+        if (data.conversation_id) {
+          setConversationId(data.conversation_id);
+        }
+        
         const content = data.response || "Sorry, I couldn't process that.";
         setMessages((m) => [...m, { 
           role: "model", 
@@ -79,6 +143,12 @@ export default function ChatPage() {
           risk_level: data.risk_level,
           recommended_facility: data.recommended_facility
         }]);
+        
+        // Refresh conversations to show the new one
+        if (!conversationId && data.conversation_id) {
+           fetchConversations();
+        }
+
         if (data.is_emergency) {
           VoiceService.speak("Emergency detected. Please seek medical care immediately. Call 108 or go to the nearest emergency facility.", lang);
         }
@@ -145,24 +215,58 @@ export default function ChatPage() {
 
   return (
     <AppLayout>
-      <div className={`flex flex-col mx-auto ${accessibilityMode ? 'max-w-3xl h-[calc(100vh-8rem)] text-lg' : 'max-w-4xl h-[calc(100vh-10rem)]'}`}>
-        {/* Header */}
-        <div className="flex flex-col mb-4 gap-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className={`${accessibilityMode ? 'text-3xl' : 'text-2xl'} font-black`}>🤖 AI Role-based Assistant</h1>
-              <p className="text-slate-400 text-sm">Powered by Google Gemini / Groq</p>
+      <div className={`flex w-full mx-auto gap-6 ${accessibilityMode ? 'max-w-4xl h-[calc(100vh-8rem)] text-lg' : 'max-w-6xl h-[calc(100vh-10rem)]'}`}>
+        
+        {/* Conversations Sidebar (Hidden in accessibility mode for simplicity) */}
+        {!accessibilityMode && (
+          <div className="w-64 flex flex-col shrink-0 gap-4 hidden md:flex h-full">
+            <button 
+              onClick={startNewConversation}
+              className="glass font-bold text-sm w-full py-3 rounded-xl border border-sky-500/30 text-sky-400 hover:bg-sky-500/10 transition-all flex items-center justify-center gap-2"
+            >
+              <span>+</span> New Chat
+            </button>
+            
+            <div className="flex-1 overflow-y-auto glass-dark rounded-xl p-2 flex flex-col gap-1">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider px-2 py-2 mb-1">History</h3>
+              {conversations.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => loadConversation(c.id)}
+                  className={`text-left text-sm px-3 py-2.5 rounded-lg truncate transition-all ${conversationId === c.id ? 'bg-sky-500/20 text-sky-300' : 'text-slate-300 hover:bg-slate-800'}`}
+                >
+                  {c.title}
+                </button>
+              ))}
+              {conversations.length === 0 && (
+                <div className="text-xs text-slate-500 text-center mt-4">No recent chats</div>
+              )}
             </div>
-            <div className="flex gap-4 items-center">
-              <select
-                value={lang}
-                onChange={(e) => {
-                  setLang(e.target.value);
-                  localStorage.setItem("medibot_lang", e.target.value);
-                }}
-                className="glass text-slate-200 text-sm py-1.5 px-3 rounded-lg bg-slate-800/80 outline-none border border-slate-700 focus:border-sky-500 cursor-pointer"
-              >
-                <option value="en">English</option>
+          </div>
+        )}
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0 h-full">
+          {/* Header */}
+          <div className="flex flex-col mb-4 gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className={`${accessibilityMode ? 'text-3xl' : 'text-2xl'} font-black flex items-center gap-2`}>
+                  🤖 AI Role-based Assistant
+                  {historyLoading && <span className="text-sm font-normal text-sky-400 animate-pulse">(Loading...)</span>}
+                </h1>
+                <p className="text-slate-400 text-sm">Powered by Google Gemini / Groq</p>
+              </div>
+              <div className="flex flex-wrap gap-3 items-center">
+                <select
+                  value={lang}
+                  onChange={(e) => {
+                    setLang(e.target.value);
+                    localStorage.setItem("medibot_lang", e.target.value);
+                  }}
+                  className="glass text-slate-200 text-sm py-1.5 px-3 rounded-lg bg-slate-800/80 outline-none border border-slate-700 focus:border-sky-500 cursor-pointer"
+                >
+                  <option value="en">English</option>
                 <option value="ta">தமிழ் (Tamil)</option>
                 <option value="hi">हिन्दी (Hindi)</option>
                 <option value="mr">मराठी (Marathi)</option>
@@ -368,6 +472,7 @@ export default function ChatPage() {
             </button>
           </div>
         )}
+        </div>
       </div>
     </AppLayout>
   );

@@ -174,6 +174,17 @@ def qa_node(state: AgentState) -> AgentState:
         score = doc['metadata'].get('relevance_score', 0)
         context_str += f"--- Source {idx+1} (Relevance: {score:.2f}) ---\n{doc['content']}\n\n"
         
+    # Format chat history
+    history_str = ""
+    for msg in state.get("chat_history", []):
+        history_str += f"{msg['role'].capitalize()}: {msg['content']}\n"
+    if not history_str:
+        history_str = "No prior conversation history."
+        
+    patient_context = state.get("patient_context", "")
+    if patient_context:
+        patient_context = f"\nPatient Context:\n{patient_context}\n"
+        
     qa_prompt = PromptTemplate.from_template(
         "You are an expert medical AI assistant (MediBot). Your task is to answer the user's question based strictly on the provided medical context.\n\n"
         "Rules:\n"
@@ -182,7 +193,9 @@ def qa_node(state: AgentState) -> AgentState:
         "3. Always include a disclaimer at the end stating 'Disclaimer: This information is for educational purposes and is not a substitute for professional medical advice.'\n"
         "4. Be compassionate and professional.\n"
         "5. CRITICAL: You must answer in the user's requested language ({language}). If you cannot, fallback to English safely.\n\n"
-        "Context:\n{context}\n\n"
+        "Recent Conversation History:\n{history}\n"
+        "{patient_context}\n"
+        "Knowledge Context:\n{context}\n\n"
         "User Question: {query}\n\n"
         "Answer:"
     )
@@ -191,7 +204,9 @@ def qa_node(state: AgentState) -> AgentState:
     response = chain.invoke({
         "context": context_str, 
         "query": query,
-        "language": state.get("language", "en")
+        "language": state.get("language", "en"),
+        "history": history_str,
+        "patient_context": patient_context
     })
     if hasattr(response, "content"):
         content = response.content.strip()

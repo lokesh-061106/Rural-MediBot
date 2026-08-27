@@ -25,6 +25,7 @@ from app.models.consultation import Consultation
 from app.models.reminder import Reminder
 from app.models.sync import SyncEvent
 from app.models.knowledge import KnowledgeDocument
+from app.models.memory import Conversation, Message, PatientContext
 
 # This is the MetaData object that Alembic will use
 target_metadata = Base.metadata

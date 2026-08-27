@@ -58,14 +58,59 @@ memory_saver = SqliteSaver(conn)
 # 5. Compile the Graph
 medibot_graph = graph_builder.compile(checkpointer=memory_saver)
 
-def run_medibot(query: str, thread_id: str = "default_user_1", language: str = "en"):
+from sqlalchemy.orm import Session
+from app.models.memory import Message, PatientContext, Conversation
+
+def run_medibot(
+    query: str, 
+    thread_id: str = "default_user_1", 
+    language: str = "en",
+    conversation_id: int = None,
+    user_id: int = None,
+    db: Session = None
+):
     """
     Entry point to run the LangGraph workflow.
     """
     config = {"configurable": {"thread_id": thread_id}}
     
+    chat_history = []
+    patient_context_text = ""
+    
+    if db and user_id:
+        # Load Patient Context
+        ctx = db.query(PatientContext).filter(PatientContext.user_id == user_id).first()
+        if ctx:
+            context_parts = []
+            if ctx.known_conditions:
+                context_parts.append(f"Known conditions: {', '.join(ctx.known_conditions)}")
+            if ctx.allergies:
+                context_parts.append(f"Allergies: {', '.join(ctx.allergies)}")
+            if ctx.current_medications:
+                context_parts.append(f"Medications: {', '.join(ctx.current_medications)}")
+            if ctx.relevant_notes:
+                context_parts.append(f"Notes: {ctx.relevant_notes}")
+            patient_context_text = " | ".join(context_parts)
+            
+        # Load Recent Messages (Bounded Context Strategy)
+        if conversation_id:
+            max_msgs = int(os.environ.get("MAX_CONTEXT_MESSAGES", "10"))
+            recent_msgs = db.query(Message).filter(
+                Message.conversation_id == conversation_id
+            ).order_by(Message.created_at.desc()).limit(max_msgs).all()
+            
+            # Reverse to chronological
+            for m in reversed(recent_msgs):
+                chat_history.append({"role": m.role, "content": m.content})
+
+    
     # Run the graph
-    result = medibot_graph.invoke({"query": query, "language": language}, config=config)
+    result = medibot_graph.invoke({
+        "query": query, 
+        "language": language,
+        "chat_history": chat_history,
+        "patient_context": patient_context_text
+    }, config=config)
     
     triage_info = result.get("triage", {})
     return {

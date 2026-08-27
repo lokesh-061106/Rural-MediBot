@@ -7,6 +7,12 @@ class AgentState(TypedDict):
     # The language of the query (e.g., 'en', 'hi', 'ta', 'mr')
     language: str
     
+    # Recent conversation history
+    chat_history: List[Dict[str, str]]
+    
+    # Minimal patient context string
+    patient_context: str
+    
     # The type of query identified by the Triage Agent (e.g., 'medical', 'greeting', 'emergency')
     query_type: Optional[str]
     
