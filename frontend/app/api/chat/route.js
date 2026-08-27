@@ -8,9 +8,8 @@ export async function POST(request) {
     const user = await verifyToken(token);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { message, history = [], language = "en", roleDescription = "helpful assistant" } = await request.json();
-    if (!message?.trim()) return NextResponse.json({ error: "Message required" }, { status: 400 });
-
+    const body = await request.json();
+    
     // In production, you would use an environment variable for the backend URL
     const backendUrl = process.env.FASTAPI_BACKEND_URL || "http://localhost:8000";
     
@@ -18,11 +17,13 @@ export async function POST(request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify({
-        query: message,
+        query: body.query || body.message,
         thread_id: user.sub || user.id || "default_user_1",
-        role_description: roleDescription,
+        language: body.language || "en",
+        conversation_id: body.conversation_id || null
       }),
     });
     
@@ -31,15 +32,13 @@ export async function POST(request) {
     }
     
     const data = await fastapiResponse.json();
-    return NextResponse.json({ 
-      response: data.response,
-      sources: data.sources || []
-    });
+    return NextResponse.json(data); // Forward exact response from FastAPI
   } catch (err) {
     console.error("Chat error:", err);
     return NextResponse.json({
       response: `DEBUG: ${err.message}`,
-      sources: []
+      sources: [],
+      status: "error"
     }, { status: 500 });
   }
 }

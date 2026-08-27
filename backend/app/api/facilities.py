@@ -92,6 +92,24 @@ def get_emergency_facilities(
 ):
     return get_nearby_facilities(latitude, longitude, radius_km=50.0, emergency=True, db=db)
 
+@router.get("/emergency/nearby")
+def get_emergency_facilities_structured(
+    latitude: float,
+    longitude: float,
+    radius_km: float = 50.0,
+    limit: int = 3,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    from app.services.facility_network import FacilityNetworkService
+    return FacilityNetworkService.find_emergency_facilities(
+        db=db,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        limit=limit
+    )
+
 @router.get("/{facility_id}", response_model=FacilityOut)
 def get_facility(facility_id: int, db: Session = Depends(get_db)):
     facility = db.query(HealthcareFacility).filter(HealthcareFacility.id == facility_id).first()

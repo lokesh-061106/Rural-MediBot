@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { VoiceService } from "@/lib/services/VoiceService";
+import { useLocation } from "@/hooks/useLocation";
 
 const SAMPLE_MESSAGES = [
   { role: "model", content: "👋 Hello! I'm your customizable AI assistant. I will act based on the role you define below. I support **English**, **Hindi (हिंदी)**, **Marathi (मराठी)**, **Tamil (தமிழ்)**, and **Odia (ଓଡ଼ିଆ)**.\n\n⚠️ I will ONLY answer questions relevant to my assigned role." },
@@ -17,6 +18,8 @@ export default function ChatPage() {
   const [accessibilityMode, setAccessibilityMode] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   
+  const { location, requestLocation, permission } = useLocation();
+
   // New State for Conversations Sidebar
   const [conversations, setConversations] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -125,10 +128,26 @@ export default function ChatPage() {
       } else {
         // --- ONLINE MODE ---
         const history = messages.slice(1).map((m) => ({ role: m.role, content: m.content }));
+        
+        const payload = { 
+            query: text, 
+            history, 
+            language: lang, 
+            roleDescription, 
+            conversation_id: conversationId 
+        };
+        
+        if (location) {
+            payload.latitude = location.latitude;
+            payload.longitude = location.longitude;
+        } else if (permission === 'prompt') {
+            requestLocation();
+        }
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: text, history, language: lang, roleDescription, conversation_id: conversationId }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         
@@ -141,10 +160,9 @@ export default function ChatPage() {
           role: "model", 
           content: content,
           evidence: data.evidence || [],
-          sources: data.sources || [], // keep legacy for safety
           is_emergency: data.is_emergency,
           risk_level: data.risk_level,
-          recommended_facility: data.recommended_facility
+          recommended_facilities: data.recommended_facilities || []
         }]);
         
         // Refresh conversations to show the new one
@@ -380,7 +398,38 @@ export default function ChatPage() {
                     </p>
                     <div className="flex flex-col gap-3">
                       <a href="tel:108" className={`bg-red-600 hover:bg-red-700 text-white text-center rounded-lg font-bold transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>Call Ambulance (108)</a>
-                      <a href="/facilities?emergency=true" className={`bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>📍 Find Nearest Emergency Facility</a>
+                      
+                      {/* Facility Recommendations */}
+                      {msg.recommended_facilities && msg.recommended_facilities.length > 0 ? (
+                        <div className="mt-2 space-y-2">
+                          <p className="text-xs font-semibold text-slate-300">Nearest Emergency Facilities:</p>
+                          {msg.recommended_facilities.map((fac, idx) => (
+                            <div key={idx} className="bg-slate-800 p-3 rounded-lg border border-slate-700">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h5 className="text-white font-bold text-sm">{fac.name}</h5>
+                                  <p className="text-xs text-slate-400">{fac.facility_type} • {fac.distance_km} km away</p>
+                                  <div className="flex gap-2 mt-1">
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${fac.emergency_available ? 'bg-red-500/20 text-red-400' : 'bg-slate-600 text-slate-300'}`}>ER</span>
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${fac.verification_status === 'DEMO' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                      {fac.verification_status}
+                                    </span>
+                                  </div>
+                                </div>
+                                {fac.navigation && (
+                                  <a href={fac.navigation.maps_url} target="_blank" rel="noopener noreferrer" className="bg-sky-600 hover:bg-sky-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">
+                                    Navigate
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <a href="/facilities?emergency=true" className={`bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-center rounded-lg font-medium transition ${accessibilityMode ? 'py-4 text-lg' : 'py-2 text-sm'}`}>
+                          {location ? 'No nearby facilities found. Search directory' : '📍 Location unavailable. Search directory manually'}
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}
@@ -391,7 +440,22 @@ export default function ChatPage() {
                       <span className="mr-2">⚠️</span> URGENT EVALUATION RECOMMENDED
                     </div>
                     <p className="text-xs text-orange-200 mb-3">Potentially serious situation requiring prompt medical evaluation. Do not delay care.</p>
-                    <a href={`/facilities?type=Hospital`} className="block w-full bg-orange-600 hover:bg-orange-700 text-white text-center rounded-lg font-medium py-1.5 text-xs transition">Find Nearby Hospital</a>
+                    
+                    {msg.recommended_facilities && msg.recommended_facilities.length > 0 ? (
+                      <div className="bg-slate-800 p-2 rounded-lg border border-slate-700 flex justify-between items-center mt-2">
+                        <div>
+                          <h5 className="text-white font-bold text-xs">{msg.recommended_facilities[0].name}</h5>
+                          <p className="text-[10px] text-slate-400">{msg.recommended_facilities[0].distance_km} km away</p>
+                        </div>
+                        {msg.recommended_facilities[0].navigation && (
+                           <a href={msg.recommended_facilities[0].navigation.maps_url} target="_blank" rel="noopener noreferrer" className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-2 py-1 rounded font-medium transition">
+                             Navigate
+                           </a>
+                        )}
+                      </div>
+                    ) : (
+                      <a href={`/facilities?type=Hospital`} className="block w-full bg-orange-600 hover:bg-orange-700 text-white text-center rounded-lg font-medium py-1.5 text-xs transition">Find Nearby Hospital</a>
+                    )}
                   </div>
                 )}
 
@@ -401,7 +465,22 @@ export default function ChatPage() {
                       <span className="mr-2">⚕️</span> ROUTINE MEDICAL CARE
                     </div>
                     <p className="text-xs text-yellow-200 mb-3">Symptoms may require routine medical attention or monitoring.</p>
-                    <a href={`/facilities?type=PHC`} className="block w-full bg-yellow-600 hover:bg-yellow-700 text-slate-900 text-center rounded-lg font-bold py-1.5 text-xs transition">Find Nearby Clinic (PHC)</a>
+                    
+                    {msg.recommended_facilities && msg.recommended_facilities.length > 0 ? (
+                      <div className="bg-slate-800 p-2 rounded-lg border border-slate-700 flex justify-between items-center mt-2">
+                        <div>
+                          <h5 className="text-white font-bold text-xs">{msg.recommended_facilities[0].name}</h5>
+                          <p className="text-[10px] text-slate-400">{msg.recommended_facilities[0].distance_km} km away</p>
+                        </div>
+                        {msg.recommended_facilities[0].navigation && (
+                           <a href={msg.recommended_facilities[0].navigation.maps_url} target="_blank" rel="noopener noreferrer" className="bg-yellow-600 hover:bg-yellow-500 text-slate-900 text-[10px] px-2 py-1 rounded font-bold transition">
+                             Navigate
+                           </a>
+                        )}
+                      </div>
+                    ) : (
+                      <a href={`/facilities?type=PHC`} className="block w-full bg-yellow-600 hover:bg-yellow-700 text-slate-900 text-center rounded-lg font-bold py-1.5 text-xs transition">Find Nearby Clinic (PHC)</a>
+                    )}
                   </div>
                 )}
 

@@ -34,6 +34,8 @@ class ChatRequest(BaseModel):
     thread_id: str = "default_user_1"
     language: str = "en"
     conversation_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class EvidenceItem(BaseModel):
     document_id: str
@@ -146,7 +148,9 @@ async def chat_endpoint(
             language=request.language,
             conversation_id=conversation_id,
             user_id=user_id,
-            db=db
+            db=db,
+            latitude=request.latitude,
+            longitude=request.longitude
         )
         total_latency_ms = (time.time() - start_time) * 1000
         
@@ -157,6 +161,7 @@ async def chat_endpoint(
             risk_level = result.get("risk_level", "low")
             triage_info = result.get("triage", None)
             recommended_facility = result.get("recommended_facility", None)
+            recommended_facilities = result.get("recommended_facilities", [])
             evidence = result.get("evidence", [])
         else:
             # Fallback if result is just a string (old behavior)
@@ -165,6 +170,7 @@ async def chat_endpoint(
             risk_level = "low"
             triage_info = None
             recommended_facility = None
+            recommended_facilities = []
             evidence = []
             
         # Persist assistant response
@@ -188,9 +194,12 @@ async def chat_endpoint(
             "reason_code": "emergency" if is_emergency else "standard",
             "evidence_count": len(evidence),
             "language": request.language,
-            "retrieval_latency_ms": result.get("retrieval_latency_ms"),
-            "generation_latency_ms": result.get("generation_latency_ms"),
-            "triage_latency_ms": result.get("triage_latency_ms"),
+            "retrieval_latency_ms": result.get("retrieval_latency_ms") if isinstance(result, dict) else None,
+            "generation_latency_ms": result.get("generation_latency_ms") if isinstance(result, dict) else None,
+            "triage_latency_ms": result.get("triage_latency_ms") if isinstance(result, dict) else None,
+            "facility_lookup_latency_ms": result.get("facility_lookup_latency_ms") if isinstance(result, dict) else None,
+            "location_available": request.latitude is not None and request.longitude is not None,
+            "recommended_facilities_count": len(recommended_facilities),
             "conversation_id": conversation_id
         }})
             
@@ -201,6 +210,7 @@ async def chat_endpoint(
             "risk_level": risk_level,
             "triage": triage_info,
             "recommended_facility": recommended_facility,
+            "recommended_facilities": recommended_facilities,
             "language": request.language,
             "conversation_id": conversation_id,
             "status": "success"

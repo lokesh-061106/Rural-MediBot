@@ -67,7 +67,9 @@ def run_medibot(
     language: str = "en",
     conversation_id: int = None,
     user_id: int = None,
-    db: Session = None
+    db: Session = None,
+    latitude: float = None,
+    longitude: float = None
 ):
     """
     Entry point to run the LangGraph workflow.
@@ -109,17 +111,52 @@ def run_medibot(
         "query": query, 
         "language": language,
         "chat_history": chat_history,
-        "patient_context": patient_context_text
+        "patient_context": patient_context_text,
+        "latitude": latitude,
+        "longitude": longitude,
+        "recommended_facilities": []
     }, config=config)
     
     triage_info = result.get("triage", {})
+    risk_level = result.get("risk_level", "GREEN")
+    recommended_facilities = []
+    facility_lookup_latency_ms = None
+    
+    if db and latitude and longitude and risk_level in ["RED", "ORANGE", "YELLOW"]:
+        import time
+        from app.services.facility_network import FacilityNetworkService
+        
+        start_fac = time.time()
+        is_emerg = (risk_level == "RED")
+        radius = 50.0 if is_emerg else 20.0
+        
+        try:
+            recommended_facilities = FacilityNetworkService.find_nearby_facilities(
+                db=db,
+                latitude=latitude,
+                longitude=longitude,
+                radius_km=radius,
+                emergency=True if is_emerg else None,
+                limit=3
+            )
+        except Exception as e:
+            print(f"[Facility Network] Lookup failed: {e}")
+            
+        facility_lookup_latency_ms = (time.time() - start_fac) * 1000
+
     return {
         "final_answer": result.get("final_answer", ""),
         "sources": result.get("sources", []),
+        "evidence": result.get("evidence", []),
         "is_emergency": result.get("is_emergency", False),
-        "risk_level": result.get("risk_level", "GREEN"),
+        "risk_level": risk_level,
         "triage": triage_info,
-        "recommended_facility": result.get("recommended_facility_type", None)
+        "recommended_facility": result.get("recommended_facility", None),
+        "recommended_facilities": recommended_facilities,
+        "triage_latency_ms": result.get("triage_latency_ms"),
+        "retrieval_latency_ms": result.get("retrieval_latency_ms"),
+        "generation_latency_ms": result.get("generation_latency_ms"),
+        "facility_lookup_latency_ms": facility_lookup_latency_ms
     }
 
 if __name__ == "__main__":

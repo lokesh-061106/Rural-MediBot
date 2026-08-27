@@ -41,3 +41,11 @@ class AgentState(TypedDict):
     triage_latency_ms: Optional[float]
     retrieval_latency_ms: Optional[float]
     generation_latency_ms: Optional[float]
+    facility_lookup_latency_ms: Optional[float]
+    
+    # User's GPS Location for routing (M5.1)
+    latitude: Optional[float]
+    longitude: Optional[float]
+    
+    # Facility recommendations (M5.1)
+    recommended_facilities: List[Dict[str, Any]]
