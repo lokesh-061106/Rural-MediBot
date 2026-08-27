@@ -67,7 +67,10 @@ def run_medibot(query: str, thread_id: str = "default_user_1"):
     
     return {
         "final_answer": result.get("final_answer", ""),
-        "sources": result.get("sources", [])
+        "sources": result.get("sources", []),
+        "is_emergency": result.get("is_emergency", False),
+        "risk_level": result.get("risk_level", "low"),
+        "recommended_facility": result.get("recommended_facility_type", None)
     }
 
 if __name__ == "__main__":

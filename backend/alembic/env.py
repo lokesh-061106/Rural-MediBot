@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.database import Base
 from app.models import user  # ensure models are imported
+from app.models import facility
 
 target_metadata = Base.metadata
 

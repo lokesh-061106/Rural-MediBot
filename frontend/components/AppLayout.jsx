@@ -31,12 +31,13 @@ export default function AppLayout({ children }) {
   };
 
   const navLinks = user?.role === "admin"
-    ? [{ href: "/admin", label: "⚙️ Admin Panel" }, { href: "/chat", label: `🤖 ${t.chat}` }]
+    ? [{ href: "/admin", label: "⚙️ Admin Panel" }, { href: "/admin/facilities", label: "🏥 Manage Facilities" }, { href: "/chat", label: `🤖 ${t.chat}` }, { href: "/facilities", label: "🏥 Find Hospital" }]
     : user?.role === "doctor"
-    ? [{ href: "/doctor", label: "🏥 Clinical Queue" }, { href: "/chat", label: `🤖 ${t.chat}` }]
+    ? [{ href: "/doctor", label: "🏥 Clinical Queue" }, { href: "/chat", label: `🤖 ${t.chat}` }, { href: "/facilities", label: "🏥 Find Hospital" }]
     : [
         { href: "/dashboard", label: `🏠 ${t.home}` },
         { href: "/chat", label: `🤖 ${t.chat}` },
+        { href: "/facilities", label: "🏥 Find Hospital" },
         { href: "/reports", label: `📋 ${t.reports}` },
         { href: "/reminders", label: `💊 ${t.reminders}` },
         { href: "/telemedicine", label: `📹 ${t.telemedicine}` },

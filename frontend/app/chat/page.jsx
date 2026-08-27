@@ -55,7 +55,10 @@ export default function ChatPage() {
         setMessages((m) => [...m, { 
           role: "model", 
           content: data.response || "Sorry, I couldn't process that.",
-          sources: data.sources || []
+          sources: data.sources || [],
+          is_emergency: data.is_emergency,
+          risk_level: data.risk_level,
+          recommended_facility: data.recommended_facility
         }]);
       }
 
@@ -175,6 +178,32 @@ export default function ChatPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+                
+                {/* Emergency & Facility Recommendation */}
+                {msg.is_emergency && (
+                  <div className="mt-4 p-3 bg-red-900/40 border border-red-500/50 rounded-xl">
+                    <div className="flex items-center text-red-400 font-bold mb-2">
+                      <span className="mr-2">🚨</span> POSSIBLE EMERGENCY
+                    </div>
+                    <p className="text-xs text-red-200 mb-3">Your reported symptoms may require urgent medical evaluation.</p>
+                    <div className="flex flex-col gap-2">
+                      <a href="tel:108" className="bg-red-600 hover:bg-red-700 text-white text-center py-2 rounded-lg text-sm font-bold transition">Call Ambulance (108)</a>
+                      <a href="/facilities?emergency=true" className="bg-slate-800 hover:bg-slate-700 text-white text-center py-2 rounded-lg text-sm font-medium transition">Find Nearest Emergency Facility</a>
+                    </div>
+                  </div>
+                )}
+                
+                {!msg.is_emergency && msg.recommended_facility && (
+                  <div className="mt-4 p-3 bg-blue-900/30 border border-blue-500/30 rounded-xl">
+                    <div className="flex items-center text-blue-400 font-bold mb-1">
+                      <span className="mr-2">🏥</span> Recommended Care Level: {msg.recommended_facility}
+                    </div>
+                    <p className="text-[11px] text-blue-200 mb-3">Based on your {msg.risk_level} risk level symptoms, we recommend visiting a {msg.recommended_facility}.</p>
+                    <a href={`/facilities?type=${encodeURIComponent(msg.recommended_facility)}`} className="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-1.5 rounded-lg text-xs font-medium transition">
+                      Find Nearby {msg.recommended_facility}
+                    </a>
                   </div>
                 )}
               </div>

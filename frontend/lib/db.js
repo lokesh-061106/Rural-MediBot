@@ -20,6 +20,10 @@ export async function getDB() {
       if (!db.objectStoreNames.contains('saved_hospitals')) {
         db.createObjectStore('saved_hospitals', { keyPath: 'id' });
       }
+      // Cached Facilities (Offline Map Search)
+      if (!db.objectStoreNames.contains('facility_cache')) {
+        db.createObjectStore('facility_cache', { keyPath: 'id' });
+      }
       // Chat Queue (Pending messages to sync)
       if (!db.objectStoreNames.contains('chat_queue')) {
         const store = db.createObjectStore('chat_queue', { keyPath: 'client_id' });
