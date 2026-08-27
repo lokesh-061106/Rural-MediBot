@@ -76,6 +76,77 @@ def test_chat_creates_conversation(setup_users):
     # Store ID for next test
     return data["conversation_id"]
 
+def test_offline_sync_chat_query(setup_users):
+    """Verify that offline chat messages sync correctly and persist to a conversation."""
+    client = TestClient(app)
+    token = setup_users["a"]["token"]
+    
+    # 1. Create a conversation
+    res_conv = client.post(
+        "/api/conversations/",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"title": "Sync Test", "language": "en"}
+    )
+    assert res_conv.status_code == 200
+    conv_id = res_conv.json()["id"]
+
+    # 2. Sync an offline event with this conversation_id
+    sync_payload = {
+        "events": [
+            {
+                "client_id": "test_offline_msg_1",
+                "event_type": "chat_query",
+                "payload": {
+                    "query": "I had a chest pain offline",
+                    "conversation_id": conv_id,
+                    "language": "en",
+                    "is_emergency": True
+                },
+                "created_at": "2026-08-27T12:00:00Z"
+            }
+        ]
+    }
+    
+    res_sync = client.post(
+        "/api/sync/events",
+        headers={"Authorization": f"Bearer {token}"},
+        json=sync_payload
+    )
+    assert res_sync.status_code == 200
+    assert "test_offline_msg_1" in res_sync.json()["synced_client_ids"]
+    
+    # 3. Check if the message is in the conversation
+    res_msgs = client.get(
+        f"/api/conversations/{conv_id}/messages",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert res_msgs.status_code == 200
+    msgs = res_msgs.json()
+    
+    # There should be 2 messages (1 user, 1 assistant)
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "user"
+    assert msgs[0]["content"] == "I had a chest pain offline"
+    
+    assert msgs[1]["role"] == "assistant"
+    assert "MEDICAL EMERGENCY DETECTED" in msgs[1]["content"]
+    assert msgs[1]["risk_level"] == "RED"
+    
+    # 4. Idempotency test (sync same message again)
+    res_sync_2 = client.post(
+        "/api/sync/events",
+        headers={"Authorization": f"Bearer {token}"},
+        json=sync_payload
+    )
+    assert res_sync_2.status_code == 200
+    
+    # Messages should still be 2 (no duplicates)
+    res_msgs_2 = client.get(
+        f"/api/conversations/{conv_id}/messages",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert len(res_msgs_2.json()) == 2
+
 def test_chat_continues_conversation(setup_users):
     client = TestClient(app)
     token = setup_users["a"]["token"]

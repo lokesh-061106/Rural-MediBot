@@ -113,9 +113,11 @@ export default function ChatPage() {
           const content = getOfflineEmergencyResponse();
           setMessages((m) => [...m, { role: "model", content, is_emergency: true }]);
           if (accessibilityMode) VoiceService.speak(content, lang);
+          // Queue the emergency message so it syncs later
+          await queueChatMessage({ query: text, conversation_id: conversationId, language: lang, roleDescription, is_emergency: true });
         } else {
           // Queue the message to be synced later
-          await queueChatMessage({ query: text, thread_id: "default_user_1", roleDescription });
+          await queueChatMessage({ query: text, conversation_id: conversationId, language: lang, roleDescription, is_emergency: false });
           const content = getOfflineFallbackResponse();
           setMessages((m) => [...m, { role: "model", content }]);
           if (accessibilityMode) VoiceService.speak(content, lang);

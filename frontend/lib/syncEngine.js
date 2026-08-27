@@ -17,7 +17,12 @@ export async function processSyncQueue() {
         events: pendingChats.map(c => ({
           client_id: c.client_id,
           event_type: 'chat_query',
-          payload: { query: c.query, thread_id: c.thread_id },
+          payload: { 
+            query: c.query, 
+            conversation_id: c.conversation_id,
+            language: c.language,
+            is_emergency: c.is_emergency
+          },
           created_at: c.created_at
         }))
       };
