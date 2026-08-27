@@ -58,14 +58,14 @@ memory_saver = SqliteSaver(conn)
 # 5. Compile the Graph
 medibot_graph = graph_builder.compile(checkpointer=memory_saver)
 
-def run_medibot(query: str, thread_id: str = "default_user_1"):
+def run_medibot(query: str, thread_id: str = "default_user_1", language: str = "en"):
     """
     Entry point to run the LangGraph workflow.
     """
     config = {"configurable": {"thread_id": thread_id}}
     
     # Run the graph
-    result = medibot_graph.invoke({"query": query}, config=config)
+    result = medibot_graph.invoke({"query": query, "language": language}, config=config)
     
     triage_info = result.get("triage", {})
     return {

@@ -180,14 +180,19 @@ def qa_node(state: AgentState) -> AgentState:
         "1. Do not use outside knowledge. If the context does not contain the answer, say 'I do not have enough information to answer this.'\n"
         "2. Do not prescribe medication or provide definitive diagnoses.\n"
         "3. Always include a disclaimer at the end stating 'Disclaimer: This information is for educational purposes and is not a substitute for professional medical advice.'\n"
-        "4. Be compassionate and professional.\n\n"
+        "4. Be compassionate and professional.\n"
+        "5. CRITICAL: You must answer in the user's requested language ({language}). If you cannot, fallback to English safely.\n\n"
         "Context:\n{context}\n\n"
         "User Question: {query}\n\n"
         "Answer:"
     )
     
     chain = qa_prompt | get_llm()
-    response = chain.invoke({"context": context_str, "query": query})
+    response = chain.invoke({
+        "context": context_str, 
+        "query": query,
+        "language": state.get("language", "en")
+    })
     if hasattr(response, "content"):
         content = response.content.strip()
     else:

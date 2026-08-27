@@ -79,8 +79,8 @@ export default function ChatPage() {
           risk_level: data.risk_level,
           recommended_facility: data.recommended_facility
         }]);
-        if (accessibilityMode || listening) {
-           VoiceService.speak(content, lang);
+        if (data.is_emergency) {
+          VoiceService.speak("Emergency detected. Please seek medical care immediately. Call 108 or go to the nearest emergency facility.", lang);
         }
       }
 
@@ -102,14 +102,16 @@ export default function ChatPage() {
         if (isFinal) {
            setTimeout(() => {
              setListening(false);
-             sendMessage(transcript);
            }, 500);
         }
       },
       (err) => {
         console.error(err);
         setListening(false);
-        alert(err.message || "Failed to start voice recognition.");
+        // Only alert if it's not a generic no-speech error
+        if (err.error !== 'no-speech') {
+          alert(err.message || "Failed to start voice recognition.");
+        }
       },
       () => {
         setListening(false);
@@ -151,7 +153,20 @@ export default function ChatPage() {
               <h1 className={`${accessibilityMode ? 'text-3xl' : 'text-2xl'} font-black`}>🤖 AI Role-based Assistant</h1>
               <p className="text-slate-400 text-sm">Powered by Google Gemini / Groq</p>
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-4 items-center">
+              <select
+                value={lang}
+                onChange={(e) => {
+                  setLang(e.target.value);
+                  localStorage.setItem("medibot_lang", e.target.value);
+                }}
+                className="glass text-slate-200 text-sm py-1.5 px-3 rounded-lg bg-slate-800/80 outline-none border border-slate-700 focus:border-sky-500 cursor-pointer"
+              >
+                <option value="en">English</option>
+                <option value="ta">தமிழ் (Tamil)</option>
+                <option value="hi">हिन्दी (Hindi)</option>
+                <option value="mr">मराठी (Marathi)</option>
+              </select>
               <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
                 <input 
                    type="checkbox" 
@@ -161,7 +176,7 @@ export default function ChatPage() {
                 />
                 Rural Accessibility Mode
               </label>
-              <button onClick={() => setMessages(SAMPLE_MESSAGES)} className="glass px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white transition-all">Clear</button>
+              <button onClick={() => setMessages([])} className="glass px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white transition-all">Clear</button>
             </div>
           </div>
           {!accessibilityMode && (
@@ -205,8 +220,18 @@ export default function ChatPage() {
                       <span className="text-xs text-sky-400 font-semibold">{t.ai}</span>
                     </div>
                     {VoiceService.isSupported() && (
-                      <button onClick={() => VoiceService.speak(msg.content, lang)} className="text-slate-400 hover:text-white" title="Read aloud">
-                        🔊
+                      <button 
+                        onClick={() => {
+                          if (VoiceService.isSpeaking()) {
+                            VoiceService.stopSpeaking();
+                          } else {
+                            VoiceService.speak(msg.content, lang);
+                          }
+                        }} 
+                        className="text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800/50 px-2 py-1 rounded text-xs transition" 
+                        title="Read aloud"
+                      >
+                        🔊 Listen
                       </button>
                     )}
                   </div>

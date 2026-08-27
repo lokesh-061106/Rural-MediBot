@@ -4,6 +4,9 @@ class AgentState(TypedDict):
     # The user's input query
     query: str
     
+    # The language of the query (e.g., 'en', 'hi', 'ta', 'mr')
+    language: str
+    
     # The type of query identified by the Triage Agent (e.g., 'medical', 'greeting', 'emergency')
     query_type: Optional[str]
     

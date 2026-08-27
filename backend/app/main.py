@@ -31,6 +31,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     query: str
     thread_id: str = "default_user_1"
+    language: str = "en"
 
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
@@ -74,7 +75,7 @@ def health_check():
 async def chat_endpoint(request: ChatRequest):
     try:
         # Run the LangGraph orchestration
-        result = run_medibot(request.query, request.thread_id)
+        result = run_medibot(request.query, request.thread_id, request.language)
         
         # result is now a dictionary containing final_answer and sources
         if isinstance(result, dict):
@@ -100,6 +101,7 @@ async def chat_endpoint(request: ChatRequest):
             "risk_level": risk_level,
             "triage": triage_info,
             "recommended_facility": recommended_facility,
+            "language": request.language,
             "status": "success"
         }
     except Exception as e:
