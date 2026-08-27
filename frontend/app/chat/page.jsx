@@ -140,7 +140,8 @@ export default function ChatPage() {
         setMessages((m) => [...m, { 
           role: "model", 
           content: content,
-          sources: data.sources || [],
+          evidence: data.evidence || [],
+          sources: data.sources || [], // keep legacy for safety
           is_emergency: data.is_emergency,
           risk_level: data.risk_level,
           recommended_facility: data.recommended_facility
@@ -410,6 +411,29 @@ export default function ChatPage() {
                       <span className="mr-2">ℹ️</span> GENERAL HEALTH GUIDANCE
                     </div>
                     <p className="text-[10px] text-emerald-200">No immediate danger detected. This is general guidance, not a medical diagnosis.</p>
+                  </div>
+                )}
+                
+                {msg.evidence && msg.evidence.length > 0 && (
+                  <div className="mt-4 border border-slate-700 rounded-xl overflow-hidden">
+                    <details className="group">
+                      <summary className="flex items-center justify-between p-3 bg-slate-800 cursor-pointer hover:bg-slate-700 transition">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sky-400">📚</span>
+                          <span className="text-xs font-bold text-slate-300">Sources & Evidence ({msg.evidence.length})</span>
+                        </div>
+                        <span className="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="p-3 bg-slate-900/50 flex flex-col gap-3">
+                        {msg.evidence.map((ev, i) => (
+                          <div key={i} className="text-xs border-l-2 border-sky-500 pl-3">
+                            <div className="font-bold text-sky-300 mb-1">{ev.title}</div>
+                            <div className="text-slate-400 text-[10px] mb-2 font-mono">{ev.filename} (Score: {(ev.relevance_score * 100).toFixed(0)}%)</div>
+                            <p className="text-slate-300 italic">"{ev.excerpt}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>

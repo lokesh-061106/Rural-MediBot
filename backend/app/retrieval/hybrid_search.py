@@ -46,11 +46,15 @@ class HybridRetriever:
             self.bm25_retriever = BM25Retriever.from_documents(doc_objects)
             self.bm25_retriever.k = 5
 
-    def retrieve_and_rerank(self, query: str, top_k: int = 3):
+    def retrieve_and_rerank(self, query: str, top_k: int = None):
         """
         Executes Hybrid Search (Semantic + BM25) and re-ranks the results using a CrossEncoder.
         """
-        print(f"Executing hybrid search for: '{query}'")
+        import os
+        if top_k is None:
+            top_k = int(os.environ.get("RAG_TOP_K", "3"))
+            
+        print(f"Executing hybrid search for: '{query}', top_k={top_k}")
         
         # 1. Broad Retrieval
         semantic_docs = self.semantic_retriever.invoke(query)
@@ -58,9 +62,14 @@ class HybridRetriever:
         
         # Combine and deduplicate
         unique_docs = {}
+        # We use both page_content and metadata source chunk index to uniquely identify
         for doc in semantic_docs + bm25_docs:
-            if doc.page_content not in unique_docs:
-                unique_docs[doc.page_content] = doc
+            doc_id = doc.metadata.get("document_id", "")
+            chunk_idx = doc.metadata.get("chunk_index", "")
+            # Composite key for deterministic deduplication
+            key = f"{doc_id}_{chunk_idx}" if doc_id and str(chunk_idx) != "" else doc.page_content
+            if key not in unique_docs:
+                unique_docs[key] = doc
                 
         retrieved_docs = list(unique_docs.values())
         if not retrieved_docs:
@@ -68,7 +77,17 @@ class HybridRetriever:
             
         # 2. Cross-Encoder Re-ranking
         pairs = [[query, doc.page_content] for doc in retrieved_docs]
-        scores = get_cross_encoder().predict(pairs)
+        raw_scores = get_cross_encoder().predict(pairs)
+        
+        # Normalize logits to 0-1 probabilities using sigmoid
+        import math
+        def sigmoid(x):
+            try:
+                return 1 / (1 + math.exp(-x))
+            except OverflowError:
+                return 0.0 if x < 0 else 1.0
+                
+        scores = [sigmoid(score) for score in raw_scores]
         
         scored_docs = list(zip(retrieved_docs, scores))
         scored_docs.sort(key=lambda x: x[1], reverse=True)

@@ -4,8 +4,8 @@ import uvicorn
 from dotenv import load_dotenv
 load_dotenv()
 
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 import sys
 import os
 
@@ -34,6 +34,16 @@ class ChatRequest(BaseModel):
     thread_id: str = "default_user_1"
     language: str = "en"
     conversation_id: Optional[int] = None
+
+class EvidenceItem(BaseModel):
+    document_id: str
+    title: str
+    filename: str
+    source: str
+    source_type: str
+    chunk_index: int
+    relevance_score: float
+    excerpt: str
 
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
@@ -134,19 +144,19 @@ async def chat_endpoint(
         # result is now a dictionary containing final_answer and sources
         if isinstance(result, dict):
             final_answer = result.get("final_answer", "")
-            sources = result.get("sources", [])
             is_emergency = result.get("is_emergency", False)
             risk_level = result.get("risk_level", "low")
             triage_info = result.get("triage", None)
             recommended_facility = result.get("recommended_facility", None)
+            evidence = result.get("evidence", [])
         else:
             # Fallback if result is just a string (old behavior)
             final_answer = result
-            sources = []
             is_emergency = False
             risk_level = "low"
             triage_info = None
             recommended_facility = None
+            evidence = []
             
         # Persist assistant response
         if conversation_id and current_user:
@@ -163,7 +173,7 @@ async def chat_endpoint(
             
         return {
             "response": final_answer,
-            "sources": sources,
+            "evidence": evidence,
             "is_emergency": is_emergency,
             "risk_level": risk_level,
             "triage": triage_info,
