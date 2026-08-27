@@ -1,4 +1,4 @@
-﻿import csv
+import csv
 import json
 from typing import List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ class IngestStats(BaseModel):
     inserted: int = 0
     updated: int = 0
     invalid_coordinates: int = 0
+    skipped_verified_downgrade: int = 0
 
 def normalize_facility_type(raw_type: str) -> FacilityType:
     raw_type = raw_type.upper().strip()
@@ -79,9 +80,9 @@ def process_facility_record(db: Session, record: Dict[str, Any], stats: IngestSt
         HealthcareFacility.source_record_id == source_record_id
     ).first()
     
-    verification_status = str(record.get("verification_status", "UNVERIFIED")).strip().upper()
-    if verification_status not in ["DEMO", "UNVERIFIED", "VERIFIED", "STALE"]:
-        verification_status = "UNVERIFIED"
+    incoming_verification_status = str(record.get("verification_status", "UNVERIFIED")).strip().upper()
+    if incoming_verification_status not in ["DEMO", "UNVERIFIED", "VERIFIED", "STALE"]:
+        incoming_verification_status = "UNVERIFIED"
 
     is_emergency = str(record.get("emergency_available", "")).strip().lower() in ["true", "1", "yes"]
 
@@ -93,8 +94,16 @@ def process_facility_record(db: Session, record: Dict[str, Any], stats: IngestSt
         existing.latitude = lat
         existing.longitude = lon
         existing.emergency_available = is_emergency
-        existing.verification_status = verification_status
-        existing.verified_at = datetime.utcnow()
+        
+        # Phase 5: Verified Data Protection
+        if existing.verification_status == "VERIFIED" and incoming_verification_status in ["UNVERIFIED", "DEMO", "STALE"]:
+            stats.skipped_verified_downgrade += 1
+            # Preserve VERIFIED status and verified_at
+        else:
+            existing.verification_status = incoming_verification_status
+            if incoming_verification_status == "VERIFIED":
+                existing.verified_at = datetime.utcnow()
+                
         existing.status = "active"
     else:
         stats.inserted += 1
@@ -107,8 +116,8 @@ def process_facility_record(db: Session, record: Dict[str, Any], stats: IngestSt
             source=source,
             source_type=source_type,
             source_record_id=source_record_id,
-            verification_status=verification_status,
-            verified_at=datetime.utcnow(),
+            verification_status=incoming_verification_status,
+            verified_at=datetime.utcnow() if incoming_verification_status == "VERIFIED" else None,
             status="active"
         )
         db.add(new_fac)

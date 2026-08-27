@@ -411,7 +411,7 @@ export default function ChatPage() {
                                   <p className="text-xs text-slate-400">{fac.facility_type} • {fac.distance_km} km away</p>
                                   <div className="flex gap-2 mt-1">
                                     <span className={`text-[9px] px-1.5 py-0.5 rounded ${fac.emergency_available ? 'bg-red-500/20 text-red-400' : 'bg-slate-600 text-slate-300'}`}>ER</span>
-                                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${fac.verification_status === 'DEMO' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${fac.verification_status === 'VERIFIED' ? 'bg-emerald-500/20 text-emerald-400' : fac.verification_status === 'STALE' ? 'bg-amber-500/20 text-amber-400' : fac.verification_status === 'DEMO' ? 'bg-purple-500/20 text-purple-400' : 'bg-slate-500/20 text-slate-400'}`}>
                                       {fac.verification_status}
                                     </span>
                                   </div>

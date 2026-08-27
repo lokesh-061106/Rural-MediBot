@@ -15,6 +15,17 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     r = 6371 # Radius of earth in kilometers
     return c * r
 
+import os
+from datetime import datetime, timedelta
+
+def get_actual_verification_status(facility: HealthcareFacility) -> str:
+    status = facility.verification_status or "UNVERIFIED"
+    if status == "VERIFIED" and facility.verified_at:
+        stale_days = int(os.environ.get("FACILITY_STALE_DAYS", "180"))
+        if datetime.utcnow() - facility.verified_at > timedelta(days=stale_days):
+            return "STALE"
+    return status
+
 class FacilityNetworkService:
     @staticmethod
     def get_facility_navigation_data(facility: HealthcareFacility) -> Optional[Dict[str, Any]]:
@@ -37,7 +48,7 @@ class FacilityNetworkService:
             "facility_type": facility.facility_type,
             "emergency_available": facility.emergency_available,
             "ambulance_available": facility.ambulance_available,
-            "verification_status": facility.verification_status or "UNVERIFIED",
+            "verification_status": get_actual_verification_status(facility),
             "source": facility.source,
             "navigation": FacilityNetworkService.get_facility_navigation_data(facility)
         }
@@ -105,10 +116,24 @@ class FacilityNetworkService:
         1. Distance
         2. Emergency capability (prioritize True)
         3. Ambulance availability
+        4. Verification Status
         """
+        def get_verification_rank(fac: HealthcareFacility) -> int:
+            status = get_actual_verification_status(fac)
+            if status == "VERIFIED":
+                return 1
+            if status == "UNVERIFIED":
+                return 2
+            if status == "STALE":
+                return 3
+            if status == "DEMO":
+                return 4
+            return 5
+            
         return sorted(facilities_with_dist, key=lambda x: (
             x[1], # distance
             not x[0].emergency_available, # False sorts before True, so we negate
-            not x[0].ambulance_available
+            not x[0].ambulance_available,
+            get_verification_rank(x[0])
         ))
 

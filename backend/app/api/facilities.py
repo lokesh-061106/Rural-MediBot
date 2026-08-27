@@ -187,3 +187,69 @@ def reactivate_facility(
     db.commit()
     
     return {"status": "success", "message": "Facility reactivated successfully"}
+
+@router.post("/{facility_id}/verify", response_model=dict)
+def verify_facility(
+    facility_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    from app.models.user import AuditLog
+    from datetime import datetime
+    
+    db_facility = db.query(HealthcareFacility).filter(HealthcareFacility.id == facility_id).first()
+    if not db_facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+        
+    db_facility.verification_status = "VERIFIED"
+    db_facility.verified_at = datetime.utcnow()
+    db.commit()
+    
+    log = AuditLog(user_id=current_user.id, action="FACILITY_VERIFIED", resource="Facility", resource_id=str(facility_id))
+    db.add(log)
+    db.commit()
+    
+    return {"status": "success", "message": "Facility verified successfully"}
+
+@router.post("/{facility_id}/mark-stale", response_model=dict)
+def mark_facility_stale(
+    facility_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    from app.models.user import AuditLog
+    
+    db_facility = db.query(HealthcareFacility).filter(HealthcareFacility.id == facility_id).first()
+    if not db_facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+        
+    db_facility.verification_status = "STALE"
+    db.commit()
+    
+    log = AuditLog(user_id=current_user.id, action="FACILITY_MARKED_STALE", resource="Facility", resource_id=str(facility_id))
+    db.add(log)
+    db.commit()
+    
+    return {"status": "success", "message": "Facility marked as stale"}
+
+@router.post("/{facility_id}/reject", response_model=dict)
+def reject_facility(
+    facility_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    from app.models.user import AuditLog
+    
+    db_facility = db.query(HealthcareFacility).filter(HealthcareFacility.id == facility_id).first()
+    if not db_facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+        
+    db_facility.status = "inactive"
+    db_facility.verification_status = "UNVERIFIED"
+    db.commit()
+    
+    log = AuditLog(user_id=current_user.id, action="FACILITY_REJECTED", resource="Facility", resource_id=str(facility_id))
+    db.add(log)
+    db.commit()
+    
+    return {"status": "success", "message": "Facility rejected and deactivated"}
