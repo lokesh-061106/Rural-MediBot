@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 M8.3 — Authoritative Data Acquisition & Controlled Ingestion
 Test Suite: 17 deterministic tests
@@ -133,6 +134,8 @@ def _insert_doc(db, *, doc_id_suffix, content, publisher=None,
         is_authoritative=is_authoritative,
         verification_status=verification_status,
         publisher=publisher,
+        source_url="https://example.com/fixture",
+        publication_date=datetime.utcnow()
     )
     db.add(doc)
     db.commit()
@@ -532,7 +535,7 @@ def test_m83_t12_admin_verification_lifecycle(m83_db):
 
     resp = client.post(
         f"/api/admin/knowledge/documents/{doc_id}/verify",
-        headers=_admin_headers(m83_db),
+        headers=_admin_headers(m83_db), json={"checklist_confirmed": True}
     )
     assert resp.status_code == 200, f"Admin verify failed: {resp.text}"
 

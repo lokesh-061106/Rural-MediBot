@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from pydantic import BaseModel
 from typing import List, Dict, Any
 
 from app.db.database import get_db
@@ -113,13 +114,15 @@ def get_knowledge_readiness(
     f_active = sum(1 for f in facs if f.status == "active")
     
     # State Logic
-    medical_rag = "READY" if (k_authoritative > 0 and k_verified > 0 and k_active > 0) else "BLOCKED"
+    medical_rag = "BLOCKED"
+    if k_authoritative > 0 and k_verified > 0 and k_active > 0:
+        medical_rag = "CLINICALLY_DATA_READY"
+    elif k_pending > 0 or k_verified > 0:
+        medical_rag = "READY_FOR_REVIEW"
+        
     facility_network = "READY" if f_verified > 0 else "BLOCKED"
     
-    overall_state = "READY" if (medical_rag == "READY" and facility_network == "READY") else "BLOCKED"
-    
-    if overall_state == "BLOCKED":
-        overall_state = "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
+    overall_state = "CLINICALLY_DATA_READY" if (medical_rag == "CLINICALLY_DATA_READY" and facility_network == "READY") else medical_rag if medical_rag == "READY_FOR_REVIEW" else "BLOCKED"
     
     return {
         "readiness_status": overall_state,
@@ -143,14 +146,31 @@ def get_knowledge_readiness(
             "stale_facilities": f_stale,
             "active_facilities": f_active
         },
-        "documents": [{"id": d.document_id, "title": d.title, "content_hash": d.content_hash, "verification_status": d.verification_status, "is_authoritative": d.is_authoritative, "status": d.status} for d in docs]
+        "documents": [{
+            "id": d.document_id, 
+            "title": d.title, 
+            "filename": d.filename,
+            "publisher": d.publisher,
+            "source_url": d.source_url,
+            "publication_date": d.publication_date.isoformat() if d.publication_date else None,
+            "content_hash": d.content_hash, 
+            "verification_status": d.verification_status, 
+            "is_authoritative": d.is_authoritative, 
+            "status": d.status,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "verified_at": d.verified_at.isoformat() if d.verified_at else None
+        } for d in docs]
     }
 
 from datetime import datetime
 
+class VerifyRequest(BaseModel):
+    checklist_confirmed: bool = False
+
 @router.post("/knowledge/documents/{document_id}/verify")
 def verify_knowledge_document(
     document_id: str,
+    req: VerifyRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin"))
 ):
@@ -158,14 +178,48 @@ def verify_knowledge_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
         
-    if doc.status == "VALIDATION_FAILED":
-        raise HTTPException(status_code=400, detail="Cannot verify a failed document")
+    if not req.checklist_confirmed:
+        raise HTTPException(status_code=400, detail="Administrator must explicitly confirm the review checklist")
         
+    if doc.status not in ["PENDING_REVIEW", "UNVERIFIED"]:
+        raise HTTPException(status_code=400, detail="Document must be in PENDING_REVIEW or eligible state to be verified")
+        
+    if doc.status in ["DEMO", "INVALID", "STALE"]:
+        raise HTTPException(status_code=400, detail="Cannot verify a DEMO, STALE or INVALID document")
+        
+    # Provenance guard
+    if not doc.publisher:
+        raise HTTPException(status_code=400, detail="Missing required provenance metadata: publisher")
+    if not doc.source_url:
+        raise HTTPException(status_code=400, detail="Missing required provenance metadata: source_url")
+    if not doc.publication_date:
+        raise HTTPException(status_code=400, detail="Missing required provenance metadata: publication_date")
+    if not doc.content_hash:
+        raise HTTPException(status_code=400, detail="Missing required content hash")
+    if not doc.filename or not doc.chunk_count or doc.chunk_count == 0:
+        raise HTTPException(status_code=400, detail="Missing filename or content is empty")
+        
+    old_status = doc.status
     doc.verification_status = "VERIFIED"
     doc.is_authoritative = True
     doc.verified_at = datetime.utcnow()
     doc.status = "VERIFIED"
     
+    # Audit logging
+    log = AuditLog(
+        user_id=current_user.id,
+        action="VERIFY_DOCUMENT",
+        resource="KnowledgeDocument",
+        resource_id=document_id,
+        success=True,
+        details={
+            "previous_status": old_status,
+            "new_status": "VERIFIED",
+            "content_hash": doc.content_hash,
+            "review_decision": "APPROVE"
+        }
+    )
+    db.add(log)
     db.commit()
     return {"message": "Document marked as verified", "document_id": document_id}
 
@@ -179,8 +233,14 @@ def activate_knowledge_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
         
-    if doc.verification_status != "VERIFIED":
-        raise HTTPException(status_code=400, detail="Document must be VERIFIED before it can be ACTIVE")
+    if doc.verification_status != "VERIFIED" or not doc.is_authoritative:
+        raise HTTPException(status_code=400, detail="Document must be VERIFIED and authoritative before it can be ACTIVE")
+        
+    if doc.status in ["ACTIVE", "DEPRECATED", "STALE", "DEMO", "PENDING_REVIEW"]:
+        raise HTTPException(status_code=400, detail=f"Document is in state {doc.status} which cannot be activated")
+        
+    if not doc.publisher or not doc.source_url or not doc.content_hash:
+        raise HTTPException(status_code=400, detail="Missing required provenance or content hash")
         
     old_docs = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.filename == doc.filename,
@@ -190,7 +250,61 @@ def activate_knowledge_document(
     
     for old_doc in old_docs:
         old_doc.status = "DEPRECATED"
+        db.add(AuditLog(
+            user_id=current_user.id,
+            action="DEPRECATE_DOCUMENT",
+            resource="KnowledgeDocument",
+            resource_id=old_doc.document_id,
+            success=True
+        ))
         
+    old_status = doc.status
     doc.status = "ACTIVE"
+    
+    log = AuditLog(
+        user_id=current_user.id,
+        action="ACTIVATE_DOCUMENT",
+        resource="KnowledgeDocument",
+        resource_id=document_id,
+        success=True,
+        details={
+            "previous_status": old_status,
+            "new_status": "ACTIVE",
+            "content_hash": doc.content_hash,
+            "review_decision": "ACTIVATE"
+        }
+    )
+    db.add(log)
     db.commit()
     return {"message": "Document activated", "deprecated_count": len(old_docs)}
+
+
+@router.post("/knowledge/documents/{document_id}/reject")
+def reject_knowledge_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.document_id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    old_status = doc.status
+    doc.status = "REJECTED"
+    
+    log = AuditLog(
+        user_id=current_user.id,
+        action="REJECT_DOCUMENT",
+        resource="KnowledgeDocument",
+        resource_id=document_id,
+        success=True,
+        details={
+            "previous_status": old_status,
+            "new_status": "REJECTED",
+            "content_hash": doc.content_hash,
+            "review_decision": "REJECT"
+        }
+    )
+    db.add(log)
+    db.commit()
+    return {"message": "Document rejected", "document_id": document_id}

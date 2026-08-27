@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.user import User
@@ -12,6 +12,9 @@ client = TestClient(app)
 def m81_db():
     Base.metadata.create_all(bind=engine)
     db = next(get_db())
+    
+    db.query(KnowledgeDocument).delete()
+    db.commit()
     
     # Create admin
     admin = User(full_name="Admin", email="admin81@test.com", role="admin", password_hash="pw", is_active=True)
@@ -35,7 +38,7 @@ def test_missing_authoritative_dataset(m81_db):
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
+    assert data["readiness_status"] == "BLOCKED"
     assert data["knowledge_metrics"]["total_documents"] == 0
 
 def test_unverified_document_rejection_and_metadata(m81_db):
@@ -59,7 +62,7 @@ def test_unverified_document_rejection_and_metadata(m81_db):
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
+    assert data["readiness_status"] == "BLOCKED"
     
     # Valid metadata handling
     assert data["knowledge_metrics"]["total_documents"] == 1
@@ -94,8 +97,7 @@ def test_content_hash_integrity_and_provenance(m81_db):
     assert verified_doc["verification_status"] == "VERIFIED"
     assert verified_doc["is_authoritative"] is True
     
-    # Since total is 2 but authoritative is 1, readiness is still not fully ready
-    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
+    assert data["readiness_status"] == "READY_FOR_REVIEW"
 
 def test_hybrid_search_rejects_unverified_docs():
     from app.retrieval.hybrid_search import get_hybrid_retriever

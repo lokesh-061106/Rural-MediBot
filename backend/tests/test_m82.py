@@ -85,7 +85,7 @@ def test_version_control(m82_db, tmp_path):
     # Setup v1
     f1 = tmp_path / "guide.txt"
     f1.write_text("V1 Content")
-    ingest_document(str(f1), m82_db, {"publisher": "MOHFW", "version": "1.0"})
+    ingest_document(str(f1), m82_db, {"publisher": "MOHFW", "version": "1.0", "source_url": "https://mohfw.gov.in/v1", "publication_date": "2023-01-01"})
     
     doc1 = m82_db.query(KnowledgeDocument).filter_by(filename="guide.txt", version="1.0").first()
     doc1.verification_status = "VERIFIED"
@@ -95,7 +95,7 @@ def test_version_control(m82_db, tmp_path):
     # Ingest v2 (same filename, new content)
     f2 = tmp_path / "guide.txt" # same name
     f2.write_text("V2 Content Updates")
-    ingest_document(str(f2), m82_db, {"publisher": "MOHFW", "version": "2.0"})
+    ingest_document(str(f2), m82_db, {"publisher": "MOHFW", "version": "2.0", "source_url": "https://mohfw.gov.in/v2", "publication_date": "2024-01-01"})
     
     # Assert v1 is STILL ACTIVE
     m82_db.refresh(doc1)
@@ -106,8 +106,8 @@ def test_version_control(m82_db, tmp_path):
     
     # Admin verifies and activates v2
     headers = get_headers(m82_db, "admin82@test.com", "admin")
-    client.post(f"/api/admin/knowledge/documents/{doc2.document_id}/verify", headers=headers)
-    client.post(f"/api/admin/knowledge/documents/{doc2.document_id}/activate", headers=headers)
+    client.post(f"/api/admin/knowledge/documents/{doc2.document_id}/verify", headers=headers, json={"checklist_confirmed": True})
+    client.post(f"/api/admin/knowledge/documents/{doc2.document_id}/activate", headers=headers, json={"checklist_confirmed": True})
     
     # Assert v1 is DEPRECATED and v2 is ACTIVE
     m82_db.refresh(doc1)
@@ -119,10 +119,10 @@ def test_rbac_patient_rejected(m82_db):
     doc = m82_db.query(KnowledgeDocument).first()
     headers = get_headers(m82_db, "patient82@test.com", "patient")
     
-    res1 = client.post(f"/api/admin/knowledge/documents/{doc.document_id}/verify", headers=headers)
+    res1 = client.post(f"/api/admin/knowledge/documents/{doc.document_id}/verify", headers=headers, json={"checklist_confirmed": True})
     assert res1.status_code == 403
     
-    res2 = client.post(f"/api/admin/knowledge/documents/{doc.document_id}/activate", headers=headers)
+    res2 = client.post(f"/api/admin/knowledge/documents/{doc.document_id}/activate", headers=headers, json={"checklist_confirmed": True})
     assert res2.status_code == 403
 
 def test_facility_ingestion_idempotency_and_downgrade(m82_db):
@@ -158,7 +158,7 @@ def test_readiness_blocked(m82_db):
     headers = get_headers(m82_db, "admin82@test.com", "admin")
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     data = res.json()
-    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
+    assert data["readiness_status"] == "BLOCKED"
     assert data["subsystems"]["medical_rag"] == "BLOCKED"
     assert data["subsystems"]["facility_network"] == "BLOCKED"
 

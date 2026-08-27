@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
@@ -66,3 +66,4 @@ class AuditLog(Base):
     user_agent = Column(String, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     success = Column(Boolean, default=True)
+    details = Column(JSON, nullable=True)

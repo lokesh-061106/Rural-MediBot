@@ -46,9 +46,9 @@ The Medibot software stack from M3.5 through M8.3 is implemented, tested, and ha
 
 ---
 
-## 2. Data Readiness — Medical Knowledge
+## 2. Data Readiness – Medical Knowledge
 
-**STATUS: ❌ BLOCKED — AUTHORITATIVE PRODUCTION DATASET: NOT VERIFIED**
+**STATUS: ❌ BLOCKED – AUTHORITATIVE PRODUCTION DATASET: PENDING ADMINISTRATIVE REVIEW**
 
 ### What Is in the Repository
 
@@ -62,6 +62,12 @@ The Medibot software stack from M3.5 through M8.3 is implemented, tested, and ha
 | `backend/data/documents/R5.pdf` | **UNVERIFIED / PENDING_REVIEW** | National Centre for Disease Control (NCDC) guidelines ingested but pending admin verification |
 
 Authoritative medical documents have been supplied and successfully ingested. However, they remain strictly blocked from the production RAG pipeline until an authorized administrator explicitly verifies and activates them.
+
+After verification but before activation, status will be:
+**AUTHORITATIVE DATA: VERIFIED BUT NOT ACTIVE**
+
+Only after explicit activation will the status be:
+**MEDICAL RAG: READY**
 
 ### What Is Required
 
