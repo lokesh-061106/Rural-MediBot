@@ -15,10 +15,12 @@ export default function AdminKnowledge() {
   const router = useRouter();
 
   const loadData = () => {
-    fetch("/api/admin/knowledge/readiness")
-      .then(res => res.json())
-      .then(d => {
-        setData(d);
+    Promise.all([
+      fetch("/api/admin/knowledge/readiness").then(res => res.json()),
+      fetch("/api/admin/knowledge/documents").then(res => res.json())
+    ])
+      .then(([readinessData, docsData]) => {
+        setData({ ...readinessData, documents: docsData });
         setLoading(false);
       })
       .catch(err => {
@@ -92,10 +94,14 @@ export default function AdminKnowledge() {
         </div>
 
         <div className="glass-dark rounded-2xl p-6 mb-6">
-          <h2 className="font-bold mb-4 text-rose-400">⚠️ Strict Warning</h2>
-          <p className="text-sm text-slate-300">
+          <h2 className="font-bold mb-4 text-rose-400">🚨 Strict Warning</h2>
+          <p className="text-sm text-slate-300 mb-4">
             Verification means a human administrator has reviewed the actual document and approved its authority and provenance for clinical use. Do not verify based solely on filename, formatting, or AI-generated claims.
           </p>
+          <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+            <h3 className="font-semibold text-xs text-slate-400 uppercase tracking-wide mb-1">Current Readiness State</h3>
+            <p className="font-mono text-sm text-sky-300">{data?.readiness_status || 'UNKNOWN'}</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4">

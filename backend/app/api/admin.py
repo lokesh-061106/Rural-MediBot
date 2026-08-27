@@ -88,6 +88,34 @@ def get_audit_logs(
 
 from app.models.knowledge import KnowledgeDocument
 
+@router.get("/knowledge/documents")
+def get_knowledge_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    docs = db.query(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc()).all()
+    # Serialize documents
+    return [
+        {
+            "id": d.document_id,
+            "filename": d.filename,
+            "title": d.title,
+            "publisher": d.publisher,
+            "issuing_authority": d.organization,
+            "source_url": d.source_url,
+            "publication_date": d.publication_date,
+            "version": d.version,
+            "chunk_count": d.chunk_count,
+            "content_hash": d.content_hash,
+            "verification_status": d.verification_status,
+            "status": d.status,
+            "is_authoritative": d.is_authoritative,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "verified_at": d.verified_at.isoformat() if d.verified_at else None
+        }
+        for d in docs
+    ]
+
 @router.get("/knowledge/readiness")
 def get_knowledge_readiness(
     db: Session = Depends(get_db),
