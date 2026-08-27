@@ -48,19 +48,24 @@ The Medibot software stack from M3.5 through M8.3 is implemented, tested, and ha
 
 ## 2. Data Readiness — Medical Knowledge
 
-**STATUS: ❌ BLOCKED — AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED**
+**STATUS: ❌ BLOCKED — AUTHORITATIVE PRODUCTION DATASET: NOT VERIFIED**
 
 ### What Is in the Repository
 
 | File | Classification | Reason |
 |---|---|---|
-| `backend/data/documents/test_health.txt` | **DEMO** | 50-byte placeholder ("Fever is a common sign of illness. Updated text!") — explicitly not a clinical guideline |
+| `backend/data/documents/test_health.txt` | **DEMO** | 50-byte placeholder ("Fever is a common sign of illness. Updated text!") – explicitly not a clinical guideline |
+| `backend/data/documents/R1.pdf` | **UNVERIFIED / PENDING_REVIEW** | National Health Mission guidelines (MoHFW) ingested but pending admin verification |
+| `backend/data/documents/R2.pdf` | **UNVERIFIED / PENDING_REVIEW** | Maternal health guidelines (MoHFW) ingested but pending admin verification |
+| `backend/data/documents/R3.pdf` | **UNVERIFIED / PENDING_REVIEW** | Directorate General of Health Services guidelines ingested but pending admin verification |
+| `backend/data/documents/R4.pdf` | **UNVERIFIED / PENDING_REVIEW** | Central TB Division guidelines ingested but pending admin verification |
+| `backend/data/documents/R5.pdf` | **UNVERIFIED / PENDING_REVIEW** | National Centre for Disease Control (NCDC) guidelines ingested but pending admin verification |
 
-No authoritative medical documents are present.
+Authoritative medical documents have been supplied and successfully ingested. However, they remain strictly blocked from the production RAG pipeline until an authorized administrator explicitly verifies and activates them.
 
 ### What Is Required
 
-To unblock the medical RAG subsystem, an authorized project administrator must supply **real** clinical guidelines from accepted authoritative sources:
+To unblock the medical RAG subsystem, an authorized project administrator must execute the verification lifecycle on the supplied PDFs:
 
 | Accepted Source | Example Document Type |
 |---|---|
