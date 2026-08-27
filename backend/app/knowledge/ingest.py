@@ -60,17 +60,20 @@ def process_file(file_path: str) -> str:
         # .txt and .md
         return extract_text_from_text_file(file_path)
 
-def ingest_document(file_path: str, db: Session) -> dict:
+def ingest_document(file_path: str, db: Session, doc_metadata: dict = None) -> dict:
     """
     Ingests a single document into PostgreSQL (metadata) and ChromaDB (chunks).
     Returns a result dict for logging.
     """
+    if doc_metadata is None:
+        doc_metadata = {}
+        
     filename = os.path.basename(file_path)
     ext = os.path.splitext(filename)[1].lower()
     
     result = {
         "file": filename,
-        "status": "failed",
+        "status": "VALIDATION_FAILED",
         "reason": "",
         "chunks": 0
     }
@@ -86,10 +89,6 @@ def ingest_document(file_path: str, db: Session) -> dict:
         return result
         
     content_hash = get_content_hash(content)
-    
-    # Deterministic document_id (we use the content hash to ensure uniqueness)
-    # Using content hash means if a document is updated, its hash changes, 
-    # making it a new ingestion automatically (with a new ID), fulfilling M4.1 D.
     document_id = f"doc_{content_hash}"
     
     # 1. Idempotency Check in PostgreSQL
@@ -100,30 +99,22 @@ def ingest_document(file_path: str, db: Session) -> dict:
         return result
         
     # Check for older versions of the same file
-    old_version = db.query(KnowledgeDocument).filter(
+    old_versions = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.filename == filename,
         KnowledgeDocument.source == file_path
-    ).first()
+    ).order_by(KnowledgeDocument.id.desc()).all()
     
-    version_num = "1.0"
-    if old_version:
-        # It's an update. We'll delete the old one from DB.
-        # Note: ChromaDB doesn't have a simple cascading delete, but we can delete by where metadata matches
-        try:
-            vector_store_manager = get_vector_db_manager()
-            # Delete old chunks
-            # chroma vector store delete requires ids or where
-            # Since we generated deterministic chunk IDs, we could just delete them or use where clause
-            # Langchain chroma delete takes ids
-            old_chunk_ids = [f"{old_version.document_id}_chunk_{i}" for i in range(old_version.chunk_count)]
-            vector_store_manager.vector_store.delete(ids=old_chunk_ids)
-        except Exception as e:
-            print(f"Warning: Failed to clean up old vector chunks for {filename}: {e}")
-            
-        old_v = float(old_version.version) if old_version.version else 1.0
-        version_num = str(old_v + 1.0)
-        db.delete(old_version)
-        db.commit()
+    version_num = doc_metadata.get("version", "1.0")
+    if old_versions:
+        # M8.2: Do NOT delete old active versions. 
+        # Calculate new version if not explicitly provided
+        if "version" not in doc_metadata:
+            old_v_str = old_versions[0].version
+            try:
+                old_v = float(old_v_str) if old_v_str else 1.0
+                version_num = str(old_v + 1.0)
+            except ValueError:
+                version_num = old_v_str + "-new"
 
     # 2. Split Document into Chunks
     text_splitter = RecursiveCharacterTextSplitter(
@@ -137,8 +128,20 @@ def ingest_document(file_path: str, db: Session) -> dict:
         result["reason"] = "Document resulted in 0 chunks."
         return result
         
-    # 3. Create Document DB Entry
-    title = os.path.splitext(filename)[0].replace("_", " ").title()
+    # 3. Validation Rules (M8.2 Phase 4)
+    title = doc_metadata.get("title") or os.path.splitext(filename)[0].replace("_", " ").title()
+    publisher = doc_metadata.get("publisher")
+    
+    # In M8.2, we enforce deterministic validation. We'll allow CLI ingestion to pass basic validation 
+    # if publisher isn't strictly provided in CLI yet, or we can mark it VALIDATION_FAILED.
+    # The requirement says "Validate: title, publisher/issuing organization..." 
+    # Let's require publisher to enter PENDING_REVIEW, else VALIDATION_FAILED.
+    initial_status = "PENDING_REVIEW"
+    if not publisher:
+        initial_status = "VALIDATION_FAILED"
+        result["reason"] = "Missing required metadata: publisher"
+    
+    # Create Document DB Entry
     new_doc = KnowledgeDocument(
         document_id=document_id,
         filename=filename,
@@ -146,9 +149,14 @@ def ingest_document(file_path: str, db: Session) -> dict:
         source=file_path,
         source_type=ext.replace(".", ""),
         content_hash=content_hash,
-        status="processing",
+        status=initial_status,
         chunk_count=len(chunks),
-        version=version_num
+        version=version_num,
+        is_authoritative=False,
+        verification_status="UNVERIFIED",
+        publisher=publisher,
+        source_url=doc_metadata.get("source_url"),
+        publication_date=doc_metadata.get("publication_date")
     )
     db.add(new_doc)
     
@@ -156,7 +164,11 @@ def ingest_document(file_path: str, db: Session) -> dict:
         db.commit()
     except Exception as e:
         db.rollback()
+        result["status"] = "failed"
         result["reason"] = f"DB Insert failed: {str(e)}"
+        return result
+        
+    if initial_status == "VALIDATION_FAILED":
         return result
 
     # 4. Ingest into ChromaDB
@@ -176,7 +188,8 @@ def ingest_document(file_path: str, db: Session) -> dict:
             "content_hash": content_hash,
             "title": title,
             "is_authoritative": False, # Defaults to false for unverified docs
-            "verification_status": "UNVERIFIED"
+            "verification_status": "UNVERIFIED",
+            "status": initial_status
         }
         
         documents_to_add.append(Document(page_content=chunk, metadata=chunk_metadata))
@@ -188,11 +201,10 @@ def ingest_document(file_path: str, db: Session) -> dict:
         # ChromaDB allows passing ids explicitly
         vector_store_manager.vector_store.add_documents(documents=documents_to_add, ids=ids_to_add)
         
-        # Mark as success
-        new_doc.status = "success"
+        # M8.2: We no longer set 'success'. It remains 'PENDING_REVIEW'
         db.commit()
         
-        result["status"] = "success"
+        result["status"] = "PENDING_REVIEW"
         result["chunks"] = len(chunks)
         
     except Exception as e:
@@ -237,10 +249,10 @@ def run_ingest(target_path: str):
         for file_path in files_to_process:
             res = ingest_document(file_path, db)
             
-            if res["status"] == "success":
+            if res["status"] in ("PENDING_REVIEW", "success"):
                 stats["success"] += 1
                 stats["chunks_created"] += res["chunks"]
-                print(f"[SUCCESS] {res['file']} -> {res['chunks']} chunks")
+                print(f"[SUCCESS] {res['file']} -> {res['chunks']} chunks (Pending Review)")
             elif res["status"] == "skipped":
                 stats["skipped"] += 1
                 print(f"[SKIPPED] {res['file']} -> {res['reason']}")

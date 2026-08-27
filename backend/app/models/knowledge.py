@@ -21,6 +21,14 @@ class KnowledgeDocument(Base):
     is_authoritative = Column(Boolean, default=False, nullable=False)
     verification_status = Column(String, default="UNVERIFIED", nullable=False)
     
+    # M8.2 Provenance & Version Lifecycle
+    publisher = Column(String, nullable=True)
+    source_url = Column(String, nullable=True)
+    publication_date = Column(DateTime, nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
     # Extra fields for flexibility
     organization = Column(String, nullable=True)
     disease_topic = Column(String, index=True, nullable=True)

@@ -35,8 +35,8 @@ def test_missing_authoritative_dataset(m81_db):
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["readiness_status"] == "AUTHORITATIVE MEDICAL DATASET NOT AVAILABLE"
-    assert data["metrics"]["total_documents"] == 0
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
+    assert data["knowledge_metrics"]["total_documents"] == 0
 
 def test_unverified_document_rejection_and_metadata(m81_db):
     # Add an unverified document
@@ -59,11 +59,11 @@ def test_unverified_document_rejection_and_metadata(m81_db):
     res = client.get("/api/admin/knowledge/readiness", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["readiness_status"] == "AUTHORITATIVE MEDICAL DATASET NOT AVAILABLE"
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
     
     # Valid metadata handling
-    assert data["metrics"]["total_documents"] == 1
-    assert data["metrics"]["authoritative_documents"] == 0
+    assert data["knowledge_metrics"]["total_documents"] == 1
+    assert data["knowledge_metrics"]["authoritative_documents"] == 0
     assert data["documents"][0]["content_hash"] == "hash123"
 
 def test_content_hash_integrity_and_provenance(m81_db):
@@ -95,7 +95,7 @@ def test_content_hash_integrity_and_provenance(m81_db):
     assert verified_doc["is_authoritative"] is True
     
     # Since total is 2 but authoritative is 1, readiness is still not fully ready
-    assert data["readiness_status"] == "AUTHORITATIVE MEDICAL DATASET NOT AVAILABLE"
+    assert data["readiness_status"] == "AUTHORITATIVE PRODUCTION DATASET: NOT PROVIDED / NOT VERIFIED"
 
 def test_hybrid_search_rejects_unverified_docs():
     from app.retrieval.hybrid_search import get_hybrid_retriever
@@ -108,7 +108,7 @@ def test_hybrid_search_rejects_unverified_docs():
         def invoke(self, query):
             return [
                 Document(page_content="Unverified info", metadata={"document_id": "d1", "is_authoritative": False, "verification_status": "UNVERIFIED"}),
-                Document(page_content="Verified info", metadata={"document_id": "d2", "is_authoritative": True, "verification_status": "VERIFIED"})
+                Document(page_content="Verified info", metadata={"document_id": "d2", "is_authoritative": True, "verification_status": "VERIFIED", "status": "ACTIVE"})
             ]
             
     class FakeEncoder:

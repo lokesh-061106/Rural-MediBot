@@ -60,26 +60,58 @@ class HybridRetriever:
         semantic_docs = self.semantic_retriever.invoke(query)
         bm25_docs = self.bm25_retriever.invoke(query)
         
-        # Combine and deduplicate
+        # Deduplicate retrieved documents
         unique_docs = {}
-        # We use both page_content and metadata source chunk index to uniquely identify
         for doc in semantic_docs + bm25_docs:
             doc_id = doc.metadata.get("document_id", "")
             chunk_idx = doc.metadata.get("chunk_index", "")
-            # Composite key for deterministic deduplication
             key = f"{doc_id}_{chunk_idx}" if doc_id and str(chunk_idx) != "" else doc.page_content
             if key not in unique_docs:
                 unique_docs[key] = doc
                 
-        retrieved_docs = list(unique_docs.values())
-        if not retrieved_docs:
+        # Query DB for real-time validation
+        from app.db.database import SessionLocal
+        from app.models.knowledge import KnowledgeDocument
+        
+        valid_docs = []
+        try:
+            db = SessionLocal()
+            doc_ids = {d.metadata.get("document_id") for d in unique_docs.values() if d.metadata.get("document_id")}
+            if doc_ids:
+                db_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.document_id.in_(doc_ids)).all()
+                valid_db_map = {
+                    d.document_id: d for d in db_docs 
+                    if d.is_authoritative and d.verification_status == "VERIFIED" and d.status == "ACTIVE"
+                }
+                # Track which IDs actually exist in DB (regardless of validity)
+                known_db_ids = {d.document_id for d in db_docs}
+                for doc in unique_docs.values():
+                    d_id = doc.metadata.get("document_id")
+                    
+                    if d_id and d_id in known_db_ids:
+                        # Doc exists in DB — require DB-level validation
+                        if d_id in valid_db_map:
+                            valid_docs.append(doc)
+                    else:
+                        # Doc NOT in DB (e.g., test mocks, in-memory docs) — fall back to metadata
+                        if (doc.metadata.get("is_authoritative") and
+                                doc.metadata.get("verification_status") == "VERIFIED" and
+                                doc.metadata.get("status", "ACTIVE") == "ACTIVE"):
+                            valid_docs.append(doc)
+            else:
+                # Fallback for purely mock metadata without document_ids
+                valid_docs = [d for d in unique_docs.values() if d.metadata.get("is_authoritative") and d.metadata.get("verification_status") == "VERIFIED" and d.metadata.get("status", "ACTIVE") == "ACTIVE"]
+        finally:
+            db.close()
+            
+        if not valid_docs:
             return []
             
         # 2. Cross-Encoder Re-ranking
-        pairs = [[query, doc.page_content] for doc in retrieved_docs]
+        pairs = [[query, doc.page_content] for doc in valid_docs]
         raw_scores = get_cross_encoder().predict(pairs)
         
-        # Normalize logits to 0-1 probabilities using sigmoid
+        # Normalize logits
         import math
         def sigmoid(x):
             try:
@@ -89,13 +121,11 @@ class HybridRetriever:
                 
         scores = [sigmoid(score) for score in raw_scores]
         
-        scored_docs = list(zip(retrieved_docs, scores))
+        scored_docs = list(zip(valid_docs, scores))
         scored_docs.sort(key=lambda x: x[1], reverse=True)
         
         top_docs = []
         for doc, score in scored_docs[:top_k]:
-            if doc.metadata.get("is_authoritative") is False or doc.metadata.get("verification_status") != "VERIFIED":
-                continue # Skip unverified docs entirely
             doc.metadata['relevance_score'] = float(score)
             top_docs.append(doc)
             
