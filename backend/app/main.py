@@ -129,9 +129,17 @@ async def chat_endpoint(
         # Run the LangGraph orchestration
         user_id = current_user.id if current_user else None
         
+        import time
+        from app.core.logger import observability_logger, request_id_ctx_var
+        import uuid
+        
+        req_id = str(uuid.uuid4())
+        request_id_ctx_var.set(req_id)
+        
         # Use conversation_id to isolate LangGraph short-lived execution state
         graph_thread_id = f"conv_{conversation_id}" if conversation_id else request.thread_id
         
+        start_time = time.time()
         result = run_medibot(
             query=request.query, 
             thread_id=graph_thread_id, 
@@ -140,6 +148,7 @@ async def chat_endpoint(
             user_id=user_id,
             db=db
         )
+        total_latency_ms = (time.time() - start_time) * 1000
         
         # result is now a dictionary containing final_answer and sources
         if isinstance(result, dict):
@@ -168,8 +177,22 @@ async def chat_endpoint(
                 content=final_answer,
                 language=request.language,
                 risk_level=risk_level,
-                reason_code=reason_code
+                reason_code=reason_code,
+                evidence_list=evidence
             )
+            
+        observability_logger.info("Chat request completed", extra={"observability_data": {
+            "endpoint": "/api/chat",
+            "processing_time_ms": total_latency_ms,
+            "risk_level": risk_level,
+            "reason_code": "emergency" if is_emergency else "standard",
+            "evidence_count": len(evidence),
+            "language": request.language,
+            "retrieval_latency_ms": result.get("retrieval_latency_ms"),
+            "generation_latency_ms": result.get("generation_latency_ms"),
+            "triage_latency_ms": result.get("triage_latency_ms"),
+            "conversation_id": conversation_id
+        }})
             
         return {
             "response": final_answer,

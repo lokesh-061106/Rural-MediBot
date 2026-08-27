@@ -36,3 +36,8 @@ class AgentState(TypedDict):
     
     # Risk level (GREEN, YELLOW, ORANGE, RED)
     risk_level: Optional[str]
+    
+    # Latency tracking for Observability
+    triage_latency_ms: Optional[float]
+    retrieval_latency_ms: Optional[float]
+    generation_latency_ms: Optional[float]

@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.memory import Conversation, Message, PatientContext
-from app.schemas.memory import ConversationCreate, ConversationUpdate, PatientContextUpdate
+from app.models.memory import Conversation, Message, PatientContext, MessageEvidence
 
 class MemoryService:
     @staticmethod
@@ -36,7 +35,7 @@ class MemoryService:
         return False
 
     @staticmethod
-    def save_message(db: Session, conversation_id: int, role: str, content: str, language: str = None, risk_level: str = None, reason_code: str = None) -> Message:
+    def save_message(db: Session, conversation_id: int, role: str, content: str, language: str = None, risk_level: str = None, reason_code: str = None, evidence_list: list = None) -> Message:
         msg = Message(
             conversation_id=conversation_id,
             role=role,
@@ -46,6 +45,22 @@ class MemoryService:
             reason_code=reason_code
         )
         db.add(msg)
+        db.flush() # flush to get msg.id
+        
+        if evidence_list:
+            for ev in evidence_list:
+                db.add(MessageEvidence(
+                    message_id=msg.id,
+                    document_id=ev.get("document_id", ""),
+                    chunk_index=ev.get("chunk_index", 0),
+                    relevance_score=ev.get("relevance_score"),
+                    title=ev.get("title", ""),
+                    filename=ev.get("filename", ""),
+                    source=ev.get("source", ""),
+                    source_type=ev.get("source_type", ""),
+                    excerpt=ev.get("excerpt", "")
+                ))
+
         db.commit()
         db.refresh(msg)
         

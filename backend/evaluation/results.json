@@ -1,0 +1,11 @@
+{
+  "evaluation_version": "1.0.0",
+  "dataset_size": 5,
+  "triage_pass_rate": 0.8,
+  "safety_checks_passed": 1.0,
+  "groundedness_checks_passed": 0.6,
+  "precision_at_k": 0.0,
+  "recall_at_k": 0.8,
+  "mrr": 0.8,
+  "evidence_hit_rate": 0.8
+}

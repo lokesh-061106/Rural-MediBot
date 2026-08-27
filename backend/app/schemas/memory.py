@@ -9,10 +9,22 @@ class MessageBase(BaseModel):
     risk_level: Optional[str] = None
     reason_code: Optional[str] = None
 
+class MessageEvidenceOut(BaseModel):
+    document_id: str
+    chunk_index: int
+    relevance_score: Optional[float] = None
+    title: Optional[str] = None
+    filename: Optional[str] = None
+    source: Optional[str] = None
+    source_type: Optional[str] = None
+    excerpt: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
 class MessageOut(MessageBase):
     id: int
     conversation_id: int
     created_at: datetime
+    evidence: List[MessageEvidenceOut] = []
     model_config = ConfigDict(from_attributes=True)
 
 class ConversationBase(BaseModel):

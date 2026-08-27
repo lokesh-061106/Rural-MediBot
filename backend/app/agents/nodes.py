@@ -34,6 +34,8 @@ from app.schemas.triage import TriageResult
 import json
 
 def triage_node(state: AgentState) -> AgentState:
+    import time
+    start_time = time.time()
     """
     Triage Agent: Analyzes the query with deterministic safety checks first, 
     then uses LLM for structured classification if not RED.
@@ -50,6 +52,7 @@ def triage_node(state: AgentState) -> AgentState:
         state["risk_level"] = "RED"
         state["query_type"] = "emergency"
         state["final_answer"] = "🚨 **MEDICAL EMERGENCY DETECTED** 🚨\nPlease call your local emergency services (108) immediately or go to the nearest emergency room. I am an AI and cannot provide emergency medical assistance."
+        state["triage_latency_ms"] = (time.time() - start_time) * 1000
         return state
         
     # 2. LLM Triage for non-RED cases (Phase 4)
@@ -126,9 +129,12 @@ def triage_node(state: AgentState) -> AgentState:
         state["final_answer"] = "🚨 **MEDICAL EMERGENCY DETECTED** 🚨\nPlease call your local emergency services (108) immediately or go to the nearest emergency room. I am an AI and cannot provide emergency medical assistance."
         
     print(f"[Triage Agent] Final Classification: {state['risk_level']}")
+    state["triage_latency_ms"] = (time.time() - start_time) * 1000
     return state
 
 def retrieval_node(state: AgentState) -> AgentState:
+    import time
+    start_time = time.time()
     """
     Retrieval Agent: Fetches relevant documents from the Hybrid Retriever.
     """
@@ -170,10 +176,13 @@ def retrieval_node(state: AgentState) -> AgentState:
     state["retrieved_docs"] = formatted_docs
     state["evidence"] = evidence_list
     print(f"[Retrieval Agent] Retrieved {len(formatted_docs)} relevant chunks (Threshold: {threshold}).")
+    state["retrieval_latency_ms"] = (time.time() - start_time) * 1000
     
     return state
 
 def qa_node(state: AgentState) -> AgentState:
+    import time
+    start_time = time.time()
     """
     QA Agent: Generates a medically accurate response based ONLY on the retrieved documents.
     """
@@ -184,6 +193,7 @@ def qa_node(state: AgentState) -> AgentState:
     if state.get("query_type") == "general":
         print("[QA Agent] Handling general query...")
         state["final_answer"] = "I am MediBot, an AI-powered healthcare assistant. How can I help you with medical information today?"
+        state["generation_latency_ms"] = (time.time() - start_time) * 1000
         return state
         
     print("[QA Agent] Generating medical response...")
@@ -192,6 +202,7 @@ def qa_node(state: AgentState) -> AgentState:
     if not evidence_list:
         state["final_answer"] = "I'm sorry, I could not find verified medical information in my knowledge base to answer your question. Please consult a healthcare professional."
         state["sources"] = []
+        state["generation_latency_ms"] = (time.time() - start_time) * 1000
         return state
         
     # Construct context string securely from evidence list
@@ -245,5 +256,7 @@ def qa_node(state: AgentState) -> AgentState:
     
     # Maintain legacy sources for API backward compatibility, but UI should use evidence
     state["sources"] = evidence_list
+    
+    state["generation_latency_ms"] = (time.time() - start_time) * 1000
     
     return state

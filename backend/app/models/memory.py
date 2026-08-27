@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.db.database import Base
@@ -32,6 +32,25 @@ class Message(Base):
 
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
+    evidence = relationship("MessageEvidence", back_populates="message", cascade="all, delete-orphan")
+
+class MessageEvidence(Base):
+    __tablename__ = "message_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(String(255), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    relevance_score = Column(Float, nullable=True)
+    title = Column(String(255), nullable=True)
+    filename = Column(String(255), nullable=True)
+    source = Column(String(255), nullable=True)
+    source_type = Column(String(50), nullable=True)
+    excerpt = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    message = relationship("Message", back_populates="evidence")
 
 class PatientContext(Base):
     __tablename__ = "patient_contexts"
