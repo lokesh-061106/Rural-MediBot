@@ -27,6 +27,9 @@ class FacilityBase(BaseModel):
     opening_hours: Optional[str] = None
     source: Optional[str] = None
     source_url: Optional[str] = None
+    source_record_id: Optional[str] = None
+    source_type: Optional[str] = None
+    verification_status: str = "UNVERIFIED"
     status: str = "active"
 
 class FacilityCreate(FacilityBase):
@@ -54,6 +57,11 @@ class FacilityUpdate(BaseModel):
     laboratory_available: Optional[bool] = None
     telemedicine_available: Optional[bool] = None
     opening_hours: Optional[str] = None
+    source: Optional[str] = None
+    source_url: Optional[str] = None
+    source_record_id: Optional[str] = None
+    source_type: Optional[str] = None
+    verification_status: Optional[str] = None
     status: Optional[str] = None
 
 class FacilityOut(FacilityBase):

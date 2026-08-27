@@ -1,4 +1,4 @@
-﻿from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from math import radians, cos, sin, asin, sqrt
 from app.models.facility import HealthcareFacility, FacilityType
@@ -37,7 +37,8 @@ class FacilityNetworkService:
             "facility_type": facility.facility_type,
             "emergency_available": facility.emergency_available,
             "ambulance_available": facility.ambulance_available,
-            "verification_status": facility.source or "UNKNOWN",
+            "verification_status": facility.verification_status or "UNVERIFIED",
+            "source": facility.source,
             "navigation": FacilityNetworkService.get_facility_navigation_data(facility)
         }
 

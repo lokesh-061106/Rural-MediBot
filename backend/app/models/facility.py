@@ -56,6 +56,10 @@ class HealthcareFacility(Base):
     # Data integrity and tracking
     source = Column(String, nullable=True) # e.g. "OSM", "Govt API", "Manual"
     source_url = Column(String, nullable=True)
+    source_record_id = Column(String, nullable=True, index=True)
+    source_type = Column(String, nullable=True)
+    verification_status = Column(String, default="UNVERIFIED", index=True) # DEMO, UNVERIFIED, VERIFIED, STALE
+    
     verified_at = Column(DateTime, nullable=True)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     status = Column(String, default="active") # active, inactive, pending_verification
