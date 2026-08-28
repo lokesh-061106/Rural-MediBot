@@ -1,8 +1,5 @@
-import { Inter } from "next/font/google";
 import "./globals.css";
 import ConnectivityBadge from "../components/ConnectivityBadge";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: "Rural MediBot — Offline-First Health Assistant",
@@ -27,8 +24,11 @@ export default function RootLayout({ children }) {
         <meta name="theme-color" content="#020617" />
         <link rel="apple-touch-icon" href="/globe.svg" />
       </head>
-      <body className={`${inter.className} bg-slate-950 text-white antialiased relative`}>
-        <div id="sw-registration" dangerouslySetInnerHTML={{ __html: `
+      <body className="bg-slate-950 text-white antialiased relative">
+        <div
+          id="sw-registration"
+          dangerouslySetInnerHTML={{
+            __html: `
           <script>
             if ('serviceWorker' in navigator) {
               window.addEventListener('load', function() {
@@ -40,7 +40,9 @@ export default function RootLayout({ children }) {
               });
             }
           </script>
-        `}} />
+        `,
+          }}
+        />
         <div className="fixed top-4 right-4 z-50">
           <ConnectivityBadge />
         </div>

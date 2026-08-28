@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
+import { getBackendUrl } from "@/lib/backend-url";
 
 export async function GET(request) {
   try {
     const token = request.cookies.get("medibot_token")?.value;
     if (!token) return NextResponse.json({ user: null }, { status: 401 });
 
-    const backendUrl = process.env.FASTAPI_BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendUrl();
     const fastapiResponse = await fetch(`${backendUrl}/api/auth/me`, {
       headers: {
-        "Authorization": `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!fastapiResponse.ok) {

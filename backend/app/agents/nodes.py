@@ -34,7 +34,7 @@ def get_llm():
             _llm = InfiniteFakeLLM()
         else:
             from langchain_groq import ChatGroq
-            _llm = ChatGroq(model="llama3-70b-8192", temperature=0)
+            _llm = ChatGroq(model="llama3-8b-8192", temperature=0)
     return _llm
 
 def get_retriever():
@@ -46,6 +46,7 @@ def get_retriever():
 from app.agents.guardrails import analyze_deterministic_safety
 from app.schemas.triage import TriageResult
 import json
+import re
 
 def triage_node(state: AgentState) -> AgentState:
     import time
@@ -66,6 +67,22 @@ def triage_node(state: AgentState) -> AgentState:
         state["risk_level"] = "RED"
         state["query_type"] = "emergency"
         state["final_answer"] = "🚨 **MEDICAL EMERGENCY DETECTED** 🚨\nPlease call your local emergency services (108) immediately or go to the nearest emergency room. I am an AI and cannot provide emergency medical assistance."
+        state["triage_latency_ms"] = (time.time() - start_time) * 1000
+        return state
+
+    if re.fullmatch(r"(?:hi|hello|hey|namaste|good morning|good afternoon|good evening)[!. ]*", query.strip(), re.IGNORECASE):
+        state["triage"] = {
+            "risk_level": "GREEN",
+            "confidence": "high",
+            "reason": "General greeting",
+            "reason_code": "GENERAL_QUERY",
+            "emergency": False,
+            "requires_human_care": False,
+            "should_bypass_rag": False
+        }
+        state["is_emergency"] = False
+        state["risk_level"] = "GREEN"
+        state["query_type"] = "general"
         state["triage_latency_ms"] = (time.time() - start_time) * 1000
         return state
         

@@ -31,7 +31,6 @@ def seed_facilities():
             "facility_type": FacilityType.DISTRICT_HOSPITAL.value,
             "ownership": "Public",
             "address": "123 Main St",
-            "city": "Pune",
             "district": "Pune",
             "state": "Maharashtra",
             "pincode": "411001",
@@ -40,7 +39,8 @@ def seed_facilities():
             "phone": "020-12345678",
             "emergency_available": True,
             "source": "DEMO",
-            "status": "DEMO"
+            "verification_status": "VERIFIED",
+            "status": "active"
         },
         {
             "name": "Shirur Primary Health Centre",
@@ -56,7 +56,8 @@ def seed_facilities():
             "phone": "02138-123456",
             "emergency_available": False,
             "source": "DEMO",
-            "status": "DEMO"
+            "verification_status": "VERIFIED",
+            "status": "active"
         },
         {
             "name": "Khed Community Health Centre",
@@ -72,7 +73,8 @@ def seed_facilities():
             "phone": "02135-123456",
             "emergency_available": True,
             "source": "DEMO",
-            "status": "DEMO"
+            "verification_status": "VERIFIED",
+            "status": "active"
         }
     ]
 

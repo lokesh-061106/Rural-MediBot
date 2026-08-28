@@ -1,22 +1,23 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { getBackendUrl } from "@/lib/backend-url";
 
-const BACKEND_URL = process.env.FASTAPI_BACKEND_URL || 'http://127.0.0.1:8000';
+const BACKEND_URL = getBackendUrl();
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const token = cookies().get('medibot_token')?.value;
+    const token = cookies().get("medibot_token")?.value;
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const res = await fetch(`${BACKEND_URL}/api/sync/events`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });

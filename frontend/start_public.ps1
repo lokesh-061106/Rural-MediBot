@@ -16,17 +16,22 @@ Write-Host "[2/4] Starting Backend (FastAPI port 8000)..." -ForegroundColor Yell
 $backendJob = Start-Job -ScriptBlock {
     param($dir)
     Set-Location $dir
-    python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 2>&1
-} -ArgumentList "$PSScriptRoot\backend"
+    # Ensure correct virtual environment is used if any
+    if (Test-Path "..\venv\Scripts\python.exe") {
+        & "..\venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 2>&1
+    } else {
+        python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 2>&1
+    }
+} -ArgumentList (Join-Path (Split-Path $PSScriptRoot -Parent) "backend")
 Start-Sleep -Seconds 5
 Write-Host "      Backend ready!" -ForegroundColor Green
 
-Write-Host "[3/4] Starting Frontend (Vite port 5173)..." -ForegroundColor Yellow
+Write-Host "[3/4] Starting Frontend (Next.js port 3000)..." -ForegroundColor Yellow
 $frontendJob = Start-Job -ScriptBlock {
     param($dir)
     Set-Location $dir
     npm run dev 2>&1
-} -ArgumentList "$PSScriptRoot\frontend"
+} -ArgumentList $PSScriptRoot
 Start-Sleep -Seconds 8
 Write-Host "      Frontend ready!" -ForegroundColor Green
 
@@ -38,7 +43,7 @@ Write-Host "  Look for: https://xxxx.trycloudflare.com" -ForegroundColor Magenta
 Write-Host "============================================" -ForegroundColor Magenta
 Write-Host ""
 
-& $cfPath tunnel --url http://localhost:5173 2>&1
+& $cfPath tunnel --url http://localhost:3000 2>&1
 
 Stop-Job $backendJob, $frontendJob -ErrorAction SilentlyContinue
 Remove-Job $backendJob, $frontendJob -ErrorAction SilentlyContinue
