@@ -184,13 +184,16 @@ export default function ChatPage() {
           setConversationId(data.conversation_id);
         }
 
-        const { getOfflineResponse } = await import("../../lib/offline-triage");
+        const { analyzeQueryOffline, getOfflineResponse } = await import("../../lib/offline-triage");
+        const offlineResult = analyzeQueryOffline(text);
         const hasVerifiedEvidence =
           Array.isArray(data.evidence) && data.evidence.length > 0;
         const backendResponse = data.response || "";
+        const isEvidenceFallback = backendResponse.toLowerCase().includes("could not find verified");
         const content =
           !res.ok ||
           data.offline ||
+          isEvidenceFallback ||
           (!hasVerifiedEvidence && data.status === "success")
             ? getOfflineResponse(text)
             : backendResponse || "Sorry, I couldn't process that.";
@@ -201,7 +204,7 @@ export default function ChatPage() {
             content: content,
             evidence: data.evidence || [],
             is_emergency: data.is_emergency,
-            risk_level: data.risk_level,
+            risk_level: isEvidenceFallback ? offlineResult.riskLevel : data.risk_level,
             recommended_facilities: data.recommended_facilities || [],
           },
         ]);
