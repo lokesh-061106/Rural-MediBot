@@ -50,6 +50,16 @@ function filterOfflineFacilities(type, emergency) {
   );
 }
 
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * HospitalService Foundation for M3.
  * Handles online API calls and offline IndexedDB fallback.
@@ -96,7 +106,7 @@ export class HospitalService {
       if (type) url += `&facility_type=${type}`;
       if (emergency !== null) url += `&emergency=${emergency}`;
 
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url);
       if (!res.ok) throw new Error("API Error");
 
       const data = await res.json();
@@ -148,7 +158,7 @@ export class HospitalService {
       if (type) url += `&facility_type=${encodeURIComponent(type)}`;
       if (emergency !== null) url += `&emergency=${emergency}`;
 
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url);
       if (!res.ok) throw new Error("API Error");
 
       const data = await res.json();
