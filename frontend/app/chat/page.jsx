@@ -169,11 +169,15 @@ export default function ChatPage() {
           requestLocation();
         }
 
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         const data = await res.json();
 
         if (data.conversation_id) {
@@ -185,7 +189,9 @@ export default function ChatPage() {
           Array.isArray(data.evidence) && data.evidence.length > 0;
         const backendResponse = data.response || "";
         const content =
-          !hasVerifiedEvidence && data.status === "success"
+          !res.ok ||
+          data.offline ||
+          (!hasVerifiedEvidence && data.status === "success")
             ? getOfflineResponse(text)
             : backendResponse || "Sorry, I couldn't process that.";
         setMessages((m) => [
