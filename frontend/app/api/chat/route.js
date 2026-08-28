@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import { getBackendUrl } from "@/lib/backend-url";
+import { getOfflineResponse } from "@/lib/offline-triage";
 
 export async function POST(request) {
+  let body = {};
   try {
     const token = request.cookies.get("medibot_token")?.value;
     const user = token ? await verifyToken(token) : null;
 
-    const body = await request.json();
+    body = await request.json();
 
     // In production, you would use an environment variable for the backend URL
     const backendUrl = getBackendUrl();
@@ -33,13 +35,22 @@ export async function POST(request) {
     }
 
     const data = await fastapiResponse.json();
+    const responseText = String(data.response || "");
+    if (
+      data.offline ||
+      responseText.toLowerCase().includes("could not find verified") ||
+      !Array.isArray(data.evidence) ||
+      data.evidence.length === 0
+    ) {
+      data.response = getOfflineResponse(body.query || body.message || "");
+      data.offline = true;
+    }
     return NextResponse.json(data); // Forward exact response from FastAPI
   } catch (err) {
     console.error("Chat error:", err);
     return NextResponse.json(
       {
-        response:
-          "The assistant is temporarily unavailable. Please try again or use offline guidance.",
+        response: getOfflineResponse(body?.query || body?.message || ""),
         sources: [],
         status: "error",
         offline: true,
