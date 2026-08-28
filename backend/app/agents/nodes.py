@@ -34,7 +34,10 @@ def get_llm():
             _llm = InfiniteFakeLLM()
         else:
             from langchain_groq import ChatGroq
-            _llm = ChatGroq(model="llama3-8b-8192", temperature=0)
+            _llm = ChatGroq(
+                model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0,
+            )
     return _llm
 
 def get_retriever():

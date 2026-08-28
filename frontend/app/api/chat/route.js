@@ -38,9 +38,11 @@ export async function POST(request) {
     console.error("Chat error:", err);
     return NextResponse.json(
       {
-        response: `DEBUG: ${err.message}`,
+        response:
+          "The assistant is temporarily unavailable. Please try again or use offline guidance.",
         sources: [],
         status: "error",
+        offline: true,
       },
       { status: 500 },
     );
