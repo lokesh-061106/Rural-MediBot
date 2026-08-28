@@ -107,7 +107,7 @@ export default function ChatPage() {
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         // --- OFFLINE MODE ---
-        const { analyzeQueryOffline, getOfflineEmergencyResponse, getOfflineFallbackResponse } = await import('../../lib/offline-triage');
+        const { analyzeQueryOffline, getOfflineEmergencyResponse, getOfflineResponse } = await import('../../lib/offline-triage');
         const { queueChatMessage } = await import('../../lib/db');
         
         const triageResult = analyzeQueryOffline(text);
@@ -121,7 +121,7 @@ export default function ChatPage() {
         } else {
           // Queue the message to be synced later
           await queueChatMessage({ query: text, conversation_id: conversationId, language: lang, roleDescription, is_emergency: false });
-          const content = getOfflineFallbackResponse();
+          const content = getOfflineResponse(text);
           setMessages((m) => [...m, { role: "model", content }]);
           if (accessibilityMode) VoiceService.speak(content, lang);
         }
@@ -180,7 +180,10 @@ export default function ChatPage() {
       saved.push({ date: new Date().toISOString(), symptoms: text });
       localStorage.setItem("medibot_chats", JSON.stringify(saved.slice(-20)));
     } catch {
-      setMessages((m) => [...m, { role: "model", content: "⚠️ Connection error. Please try again." }]);
+      const { analyzeQueryOffline, getOfflineEmergencyResponse, getOfflineResponse } = await import('../../lib/offline-triage');
+      const triageResult = analyzeQueryOffline(text);
+      const content = triageResult.isEmergency ? getOfflineEmergencyResponse() : getOfflineResponse(text);
+      setMessages((m) => [...m, { role: "model", content, is_emergency: triageResult.isEmergency }]);
     } finally { setLoading(false); }
   };
 
